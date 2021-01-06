@@ -20,10 +20,10 @@ namespace osu.Server.Spectator.Database
 
         public OsuDatabase()
         {
-            connection = GetConnection();
+            connection = getConnection();
         }
 
-        public static MySqlConnection GetConnection()
+        private static MySqlConnection getConnection()
         {
             string host = Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost";
             string user = Environment.GetEnvironmentVariable("DB_USER") ?? "root";

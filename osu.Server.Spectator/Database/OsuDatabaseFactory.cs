@@ -5,9 +5,6 @@ namespace osu.Server.Spectator.Database
 {
     public class OsuDatabaseFactory : IOsuDatabaseFactory
     {
-        public IOsuDatabase GetInstance()
-        {
-            throw new System.NotImplementedException();
-        }
+        public IOsuDatabase GetInstance() => new OsuDatabase();
     }
 }
