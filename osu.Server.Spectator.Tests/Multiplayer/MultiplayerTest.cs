@@ -105,7 +105,7 @@ namespace osu.Server.Spectator.Tests.Multiplayer
 
             var hubContext = new Mock<IHubContext<MultiplayerHub>>();
             hubContext.Setup(ctx => ctx.Groups).Returns(Groups.Object);
-            hubContext.Setup(ctx => ctx.Clients.Client(It.IsAny<string>())).Returns<string>(connectionId => (IClientProxy)Clients.Object.Client(connectionId));
+            hubContext.Setup(ctx => ctx.Clients.Client(It.IsAny<string>())).Returns<string>(connectionId => (ISingleClientProxy)Clients.Object.Client(connectionId));
             hubContext.Setup(ctx => ctx.Clients.Group(It.IsAny<string>())).Returns<string>(groupName => (IClientProxy)Clients.Object.Group(groupName));
             hubContext.Setup(ctx => ctx.Clients.All).Returns((IClientProxy)Clients.Object.All);
 
