@@ -48,7 +48,7 @@ namespace osu.Server.Spectator
             if (!Context.Request.Headers.TryGetValue("user_id", out var userIdString))
                 userIdString = Interlocked.Increment(ref userIDCounter).ToString();
 
-            var claim = new Claim(ClaimTypes.NameIdentifier, userIdString);
+            var claim = new Claim(ClaimTypes.NameIdentifier, userIdString.ToString());
 
             var authenticationTicket = new AuthenticationTicket(
                 new ClaimsPrincipal(new[] { new ClaimsIdentity(new[] { claim }, AUTH_SCHEME) }),
