@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Caching.Distributed;
 using osu.Game.Online.Multiplayer;
 using osu.Server.Spectator.Entities;
+using osu.Server.Spectator.Extensions;
 
 namespace osu.Server.Spectator.Hubs
 {
@@ -30,6 +31,17 @@ namespace osu.Server.Spectator.Hubs
         public override async Task OnConnectedAsync()
         {
             await base.OnConnectedAsync();
+
+            var previousState = UserStates.GetEntityUnsafe(CurrentContextUserId);
+
+            if (previousState != null && previousState.TokenId != Context.User!.GetJwtId())
+            {
+                // user has an existing state but token doesn't match.
+                // this indicates a second separate connection from another client that is not allowed.
+                Log($"Dropping connection {Context.ConnectionId} from user {CurrentContextUserId} as another already exists");
+                Context.Abort();
+                return;
+            }
 
             try
             {
@@ -73,9 +85,7 @@ namespace osu.Server.Spectator.Hubs
             {
                 if (usage.Item != null)
                 {
-                    bool isOurState = usage.Item.ConnectionId == Context.ConnectionId;
-
-                    if (isDisconnect && !isOurState)
+                    if (isDisconnect && !isLocalUserState(usage))
                     {
                         // not our state, owned by a different connection.
                         Log("Disconnect state cleanup aborted due to newer connection owning state");
@@ -108,7 +118,7 @@ namespace osu.Server.Spectator.Hubs
         {
             var usage = await UserStates.GetForUse(CurrentContextUserId, true);
 
-            if (usage.Item != null && usage.Item.ConnectionId != Context.ConnectionId)
+            if (usage.Item != null && !isLocalUserState(usage))
             {
                 usage.Dispose();
                 throw new InvalidStateException("State is not valid for this connection");
@@ -118,5 +128,10 @@ namespace osu.Server.Spectator.Hubs
         }
 
         protected Task<ItemUsage<TUserState>> GetStateFromUser(int userId) => UserStates.GetForUse(userId);
+
+        private bool isLocalUserState(ItemUsage<TUserState> usage)
+            => usage.Item != null
+               && usage.Item.ConnectionId == Context.ConnectionId
+               && usage.Item.TokenId == Context.User!.GetJwtId();
     }
 }
