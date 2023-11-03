@@ -12,6 +12,7 @@ using osu.Game.Scoring;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
+using osu.Server.Spectator.Extensions;
 
 namespace osu.Server.Spectator.Hubs.Spectator
 {
@@ -48,7 +49,7 @@ namespace osu.Server.Spectator.Hubs.Spectator
         {
             using (var usage = await GetOrCreateLocalUserState())
             {
-                var clientState = (usage.Item ??= new SpectatorClientState(Context.ConnectionId, CurrentContextUserId));
+                var clientState = (usage.Item ??= new SpectatorClientState(Context.ConnectionId, CurrentContextUserId, Context.User!.GetJwtId()));
 
                 if (clientState.State != null)
                 {

@@ -16,6 +16,7 @@ using osu.Game.Online.Rooms;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
+using osu.Server.Spectator.Extensions;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer
 {
@@ -98,7 +99,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                                 throw new InvalidOperationException($"User {roomUser.UserID} attempted to join room {room.RoomID} they are already present in.");
                         }
 
-                        userUsage.Item = new MultiplayerClientState(Context.ConnectionId, CurrentContextUserId, roomId);
+                        userUsage.Item = new MultiplayerClientState(Context.ConnectionId, CurrentContextUserId, Context.User!.GetJwtId(), roomId);
 
                         // because match type implementations may send subsequent information via Users collection hooks,
                         // inform clients before adding user to the room.

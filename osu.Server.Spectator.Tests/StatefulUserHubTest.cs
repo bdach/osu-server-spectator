@@ -114,7 +114,7 @@ namespace osu.Server.Spectator.Tests
             public async Task CreateUserState()
             {
                 using (var state = await GetOrCreateLocalUserState())
-                    state.Item = new ClientState(Context.ConnectionId, CurrentContextUserId);
+                    state.Item = new ClientState(Context.ConnectionId, CurrentContextUserId, Guid.NewGuid().ToString());
             }
         }
     }
