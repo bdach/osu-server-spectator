@@ -1,9 +1,11 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using osu.Game.Online.Metadata;
+using osu.Game.Users;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Entities;
 
@@ -34,6 +36,23 @@ namespace osu.Server.Spectator.Hubs.Metadata
         {
             using (var db = databaseFactory.GetInstance())
                 return await db.GetUpdatedBeatmapSets(queueId);
+        }
+
+        public async Task UpdateActivity(UserActivity? activity)
+        {
+            using (var usage = await GetOrCreateLocalUserState())
+            {
+                Debug.Assert(usage.Item != null);
+                usage.Item.UserActivity = activity;
+            }
+
+            await Clients.Others.UserActivityUpdated(CurrentContextUserId, activity);
+        }
+
+        protected override async Task CleanUpState(MetadataClientState state)
+        {
+            await base.CleanUpState(state);
+            await Clients.AllExcept(new[] { state.ConnectionId }).UserActivityUpdated(CurrentContextUserId, null);
         }
     }
 }
