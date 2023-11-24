@@ -17,5 +17,11 @@ namespace osu.Server.Spectator.Hubs.Metadata
             : base(in connectionId, in userId)
         {
         }
+
+        public UserPresence ToUserPresence() => new UserPresence
+        {
+            Activity = UserActivity,
+            Status = UserStatus,
+        };
     }
 }

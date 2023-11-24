@@ -30,6 +30,9 @@ namespace osu.Server.Spectator.Hubs.Metadata
 
             using (var usage = await GetOrCreateLocalUserState())
                 usage.Item = new MetadataClientState(Context.ConnectionId, CurrentContextUserId);
+
+            foreach (var userState in GetAllStates())
+                await Clients.Caller.UserPresenceUpdated(userState.Value.UserId, userState.Value.ToUserPresence());
         }
 
         public async Task<BeatmapUpdates> GetChangesSince(int queueId)
@@ -44,9 +47,9 @@ namespace osu.Server.Spectator.Hubs.Metadata
             {
                 Debug.Assert(usage.Item != null);
                 usage.Item.UserActivity = activity;
-            }
 
-            await Clients.Others.UserActivityUpdated(CurrentContextUserId, activity);
+                await Clients.Others.UserPresenceUpdated(CurrentContextUserId, usage.Item.ToUserPresence());
+            }
         }
 
         public async Task UpdateStatus(UserStatus? status)
@@ -55,16 +58,15 @@ namespace osu.Server.Spectator.Hubs.Metadata
             {
                 Debug.Assert(usage.Item != null);
                 usage.Item.UserStatus = status;
-            }
 
-            await Clients.Others.UserStatusUpdated(CurrentContextUserId, status);
+                await Clients.Others.UserPresenceUpdated(CurrentContextUserId, usage.Item.ToUserPresence());
+            }
         }
 
         protected override async Task CleanUpState(MetadataClientState state)
         {
             await base.CleanUpState(state);
-            await Clients.AllExcept(new[] { state.ConnectionId }).UserActivityUpdated(CurrentContextUserId, null);
-            await Clients.AllExcept(new[] { state.ConnectionId }).UserStatusUpdated(CurrentContextUserId, null);
+            await Clients.AllExcept(new[] { state.ConnectionId }).UserPresenceUpdated(CurrentContextUserId, null);
         }
     }
 }
