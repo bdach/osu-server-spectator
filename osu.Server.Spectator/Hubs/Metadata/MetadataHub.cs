@@ -28,11 +28,14 @@ namespace osu.Server.Spectator.Hubs.Metadata
         {
             await base.OnConnectedAsync();
 
-            using (var usage = await GetOrCreateLocalUserState())
-                usage.Item = new MetadataClientState(Context.ConnectionId, CurrentContextUserId);
-
             foreach (var userState in GetAllStates())
                 await Clients.Caller.UserPresenceUpdated(userState.Value.UserId, userState.Value.ToUserPresence());
+
+            using (var usage = await GetOrCreateLocalUserState())
+            {
+                usage.Item = new MetadataClientState(Context.ConnectionId, CurrentContextUserId);
+                await Clients.Others.UserPresenceUpdated(usage.Item.UserId, usage.Item.ToUserPresence());
+            }
         }
 
         public async Task<BeatmapUpdates> GetChangesSince(int queueId)
