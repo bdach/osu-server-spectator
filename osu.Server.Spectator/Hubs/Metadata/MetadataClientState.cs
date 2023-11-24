@@ -8,6 +8,9 @@ namespace osu.Server.Spectator.Hubs.Metadata
     public class MetadataClientState : ClientState
     {
         public UserActivity? UserActivity { get; set; }
+
+        public UserStatus? UserStatus { get; set; }
+
         // TODO: build hash
 
         public MetadataClientState(in string connectionId, in int userId)

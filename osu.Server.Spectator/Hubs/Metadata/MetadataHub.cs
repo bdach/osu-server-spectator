@@ -49,10 +49,22 @@ namespace osu.Server.Spectator.Hubs.Metadata
             await Clients.Others.UserActivityUpdated(CurrentContextUserId, activity);
         }
 
+        public async Task UpdateStatus(UserStatus? status)
+        {
+            using (var usage = await GetOrCreateLocalUserState())
+            {
+                Debug.Assert(usage.Item != null);
+                usage.Item.UserStatus = status;
+            }
+
+            await Clients.Others.UserStatusUpdated(CurrentContextUserId, status);
+        }
+
         protected override async Task CleanUpState(MetadataClientState state)
         {
             await base.CleanUpState(state);
             await Clients.AllExcept(new[] { state.ConnectionId }).UserActivityUpdated(CurrentContextUserId, null);
+            await Clients.AllExcept(new[] { state.ConnectionId }).UserStatusUpdated(CurrentContextUserId, null);
         }
     }
 }
