@@ -47,7 +47,10 @@ namespace osu.Server.Spectator.Hubs.Metadata
         public async Task BeginWatchingUserPresence()
         {
             foreach (var userState in GetAllStates())
-                await Clients.Caller.UserPresenceUpdated(userState.Value.UserId, userState.Value.ToUserPresence());
+            {
+                if (userState.Value.UserStatus != UserStatus.Offline)
+                    await Clients.Caller.UserPresenceUpdated(userState.Value.UserId, userState.Value.ToUserPresence());
+            }
 
             await Groups.AddToGroupAsync(Context.ConnectionId, online_presence_watchers_group);
         }
@@ -80,10 +83,15 @@ namespace osu.Server.Spectator.Hubs.Metadata
         protected override async Task CleanUpState(MetadataClientState state)
         {
             await base.CleanUpState(state);
-            await broadcastUserPresenceUpdate(state.UserId, state.ToUserPresence());
+            await broadcastUserPresenceUpdate(state.UserId, null);
         }
 
-        private Task broadcastUserPresenceUpdate(int userId, UserPresence userPresence)
-            => Clients.Group(online_presence_watchers_group).UserPresenceUpdated(Context.GetUserId(), null);
+        private Task broadcastUserPresenceUpdate(int userId, UserPresence? userPresence)
+        {
+            if (userPresence?.Status == UserStatus.Offline)
+                userPresence = null;
+
+            return Clients.Group(online_presence_watchers_group).UserPresenceUpdated(userId, userPresence);
+        }
     }
 }
