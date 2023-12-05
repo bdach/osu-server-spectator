@@ -8,6 +8,7 @@ using osu.Game.Online.Metadata;
 using osu.Game.Users;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Entities;
+using osu.Server.Spectator.Extensions;
 
 namespace osu.Server.Spectator.Hubs.Metadata
 {
@@ -33,7 +34,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
 
             using (var usage = await GetOrCreateLocalUserState())
             {
-                usage.Item = new MetadataClientState(Context.ConnectionId, CurrentContextUserId);
+                usage.Item = new MetadataClientState(Context.ConnectionId, Context.GetUserId());
                 await Clients.Others.UserPresenceUpdated(usage.Item.UserId, usage.Item.ToUserPresence());
             }
         }
@@ -51,7 +52,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
                 Debug.Assert(usage.Item != null);
                 usage.Item.UserActivity = activity;
 
-                await Clients.Others.UserPresenceUpdated(CurrentContextUserId, usage.Item.ToUserPresence());
+                await Clients.Others.UserPresenceUpdated(Context.GetUserId(), usage.Item.ToUserPresence());
             }
         }
 
@@ -62,14 +63,14 @@ namespace osu.Server.Spectator.Hubs.Metadata
                 Debug.Assert(usage.Item != null);
                 usage.Item.UserStatus = status;
 
-                await Clients.Others.UserPresenceUpdated(CurrentContextUserId, usage.Item.ToUserPresence());
+                await Clients.Others.UserPresenceUpdated(Context.GetUserId(), usage.Item.ToUserPresence());
             }
         }
 
         protected override async Task CleanUpState(MetadataClientState state)
         {
             await base.CleanUpState(state);
-            await Clients.AllExcept(new[] { state.ConnectionId }).UserPresenceUpdated(CurrentContextUserId, null);
+            await Clients.AllExcept(new[] { state.ConnectionId }).UserPresenceUpdated(Context.GetUserId(), null);
         }
     }
 }
