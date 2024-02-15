@@ -17,9 +17,11 @@ using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
 using osu.Server.Spectator.Extensions;
+using osu.Server.Spectator.Hubs.Filters;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer
 {
+    [CheckClientVersion]
     public class MultiplayerHub : StatefulUserHub<IMultiplayerClient, MultiplayerClientState>, IMultiplayerServer
     {
         protected readonly EntityStore<ServerMultiplayerRoom> Rooms;

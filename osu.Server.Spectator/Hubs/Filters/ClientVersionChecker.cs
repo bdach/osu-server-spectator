@@ -2,9 +2,13 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
+using osu.Framework.Extensions.TypeExtensions;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
@@ -15,6 +19,8 @@ namespace osu.Server.Spectator.Hubs.Filters
 {
     public class ClientVersionChecker : IHubFilter
     {
+        private static readonly HashSet<Type> hubs_to_check;
+
         private readonly EntityStore<MetadataClientState> metadataStore;
         private readonly IDatabaseFactory databaseFactory;
         private readonly IMemoryCache memoryCache;
@@ -29,21 +35,33 @@ namespace osu.Server.Spectator.Hubs.Filters
             this.memoryCache = memoryCache;
         }
 
+        static ClientVersionChecker()
+        {
+            hubs_to_check = Assembly.GetAssembly(typeof(ClientVersionChecker))!
+                                    .GetTypes()
+                                    .Where(t => t.EnumerateBaseTypes().Contains(typeof(Hub))
+                                                && t.GetCustomAttribute<CheckClientVersionAttribute>() != null)
+                                    .ToHashSet();
+        }
+
         public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
         {
-            await checkVersion(context.Context);
+            await checkVersion(context.Hub, context.Context);
             await next(context);
         }
 
         public async ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
         {
-            await checkVersion(invocationContext.Context);
+            await checkVersion(invocationContext.Hub, invocationContext.Context);
             return await next(invocationContext);
         }
 
-        private async Task checkVersion(HubCallerContext hubCallerContext)
+        private async Task checkVersion(Hub hub, HubCallerContext hubCallerContext)
         {
             if (!AppSettings.CheckClientVersion)
+                return;
+
+            if (!hubs_to_check.Contains(hub.GetType()))
                 return;
 
             var clientMetadata = metadataStore.GetEntityUnsafe(hubCallerContext.GetUserId());

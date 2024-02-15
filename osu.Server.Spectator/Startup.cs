@@ -16,6 +16,7 @@ using osu.Game.Online;
 using osu.Server.Spectator.Authentication;
 using osu.Server.Spectator.Extensions;
 using osu.Server.Spectator.Hubs;
+using osu.Server.Spectator.Hubs.Filters;
 using osu.Server.Spectator.Hubs.Metadata;
 using osu.Server.Spectator.Hubs.Multiplayer;
 using osu.Server.Spectator.Hubs.Spectator;
@@ -30,6 +31,7 @@ namespace osu.Server.Spectator
             services.AddSignalR(options =>
                     {
                         options.AddFilter<LoggingHubFilter>();
+                        options.AddFilter<ClientVersionChecker>();
                         options.AddFilter<ConcurrentConnectionLimiter>();
                     })
                     .AddMessagePackProtocol(options =>
