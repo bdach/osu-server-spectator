@@ -2,8 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
@@ -19,8 +17,6 @@ namespace osu.Server.Spectator.Hubs.Filters
 {
     public class ClientVersionChecker : IHubFilter
     {
-        private static readonly HashSet<Type> hubs_to_check;
-
         private readonly EntityStore<MetadataClientState> metadataStore;
         private readonly IDatabaseFactory databaseFactory;
         private readonly IMemoryCache memoryCache;
@@ -33,15 +29,6 @@ namespace osu.Server.Spectator.Hubs.Filters
             this.metadataStore = metadataStore;
             this.databaseFactory = databaseFactory;
             this.memoryCache = memoryCache;
-        }
-
-        static ClientVersionChecker()
-        {
-            hubs_to_check = Assembly.GetAssembly(typeof(ClientVersionChecker))!
-                                    .GetTypes()
-                                    .Where(t => t.EnumerateBaseTypes().Contains(typeof(Hub))
-                                                && t.GetCustomAttribute<CheckClientVersionAttribute>() != null)
-                                    .ToHashSet();
         }
 
         public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
@@ -61,7 +48,7 @@ namespace osu.Server.Spectator.Hubs.Filters
             if (!AppSettings.CheckClientVersion)
                 return;
 
-            if (!hubs_to_check.Contains(hub.GetType()))
+            if (!shouldCheckVersionFor(hub))
                 return;
 
             var clientMetadata = metadataStore.GetEntityUnsafe(hubCallerContext.GetUserId());
@@ -73,7 +60,11 @@ namespace osu.Server.Spectator.Hubs.Filters
                 throw new InvalidVersionException();
         }
 
-        private Task<osu_build?> getBuildByHash(string hash) => memoryCache.GetOrCreateAsync<osu_build?>(hash, async entry =>
+        private bool shouldCheckVersionFor(Hub hub) => memoryCache.GetOrCreate(
+            $"hub:{hub.GetType().ReadableName()}",
+            _ => hub.GetType().GetCustomAttribute<CheckClientVersionAttribute>() != null);
+
+        private Task<osu_build?> getBuildByHash(string hash) => memoryCache.GetOrCreateAsync<osu_build?>($"build:{hash}", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
             using (var db = databaseFactory.GetInstance())
