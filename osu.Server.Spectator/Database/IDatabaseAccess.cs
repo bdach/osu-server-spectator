@@ -146,12 +146,26 @@ namespace osu.Server.Spectator.Database
         /// <summary>
         /// Returns all available main builds from the lazer release stream.
         /// </summary>
+        /// <remarks>
+        /// Only builds with active online play (<see cref="osu_build.allow_bancho"/> = 1) are returned by this method.
+        /// </remarks>
         Task<IEnumerable<osu_build>> GetAllMainLazerBuildsAsync();
 
         /// <summary>
         /// Returns all known platform-specifc lazer builds.
         /// </summary>
+        /// <remarks>
+        /// Only builds with active online play (<see cref="osu_build.allow_bancho"/> = 1) are returned by this method.
+        /// </remarks>
         Task<IEnumerable<osu_build>> GetAllPlatformSpecificLazerBuildsAsync();
+
+        /// <summary>
+        /// Returns a lazer build for the given <paramref name="hash"/>, if one exists.
+        /// </summary>
+        /// <remarks>
+        /// Builds returned by this method may not be active for online play (<see cref="osu_build.allow_bancho"/> = 0).
+        /// </remarks>
+        Task<osu_build?> GetLazerBuildByHashAsync(string hash);
 
         /// <summary>
         /// Updates the <see cref="osu_build.users"/> count of a given <paramref name="build"/>.

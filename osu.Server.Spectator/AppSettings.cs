@@ -24,6 +24,7 @@ namespace osu.Server.Spectator
         #endregion
 
         public static bool TrackBuildUserCounts { get; set; }
+        public static bool CheckClientVersion { get; set; }
 
         public static string ServerPort { get; set; }
         public static string RedisHost { get; }
@@ -40,7 +41,9 @@ namespace osu.Server.Spectator
             S3Key = Environment.GetEnvironmentVariable("S3_KEY") ?? string.Empty;
             S3Secret = Environment.GetEnvironmentVariable("S3_SECRET") ?? string.Empty;
             ReplaysBucket = Environment.GetEnvironmentVariable("REPLAYS_BUCKET") ?? string.Empty;
+
             TrackBuildUserCounts = Environment.GetEnvironmentVariable("TRACK_BUILD_USER_COUNTS") == "1";
+            CheckClientVersion = Environment.GetEnvironmentVariable("CLIENT_CHECK_VERSION") == "1";
 
             ServerPort = Environment.GetEnvironmentVariable("SERVER_PORT") ?? "80";
             RedisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost";

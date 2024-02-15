@@ -341,7 +341,7 @@ namespace osu.Server.Spectator.Database
             var connection = await getConnectionAsync();
 
             return await connection.QueryAsync<osu_build>(
-                "SELECT `build_id`, `version`, `hash`, `users` "
+                "SELECT * "
                 + "FROM `osu_builds` "
                 + "WHERE stream_id = 7 AND allow_bancho = 1");
         }
@@ -351,9 +351,20 @@ namespace osu.Server.Spectator.Database
             var connection = await getConnectionAsync();
 
             return await connection.QueryAsync<osu_build>(
-                "SELECT `build_id`, `version`, `hash`, `users` "
+                "SELECT * "
                 + "FROM `osu_builds` "
                 + "WHERE `stream_id` IS NULL AND `version` LIKE '%-lazer-%' AND `allow_bancho` = 1");
+        }
+
+        public async Task<osu_build?> GetLazerBuildByHashAsync(string hash)
+        {
+            var connection = await getConnectionAsync();
+
+            return await connection.QuerySingleOrDefaultAsync<osu_build>(
+                "SELECT * "
+                + "FROM `osu_builds` "
+                + "WHERE `hash` = @hash "
+                + "AND (`stream_id` = 7 OR `version` LIKE '%-lazer-%')", new { hash });
         }
 
         public async Task UpdateBuildUserCountAsync(osu_build build)
