@@ -2,11 +2,12 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Caching.Memory;
-using osu.Framework.Extensions.TypeExtensions;
+using Microsoft.Extensions.Caching.Distributed;
+using Newtonsoft.Json;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
@@ -17,18 +18,20 @@ namespace osu.Server.Spectator.Hubs.Filters
 {
     public class ClientVersionChecker : IHubFilter
     {
+        private static readonly ConcurrentDictionary<Type, bool> hub_requires_version_check = new ConcurrentDictionary<Type, bool>();
+
         private readonly EntityStore<MetadataClientState> metadataStore;
         private readonly IDatabaseFactory databaseFactory;
-        private readonly IMemoryCache memoryCache;
+        private readonly IDistributedCache distributedCache;
 
         public ClientVersionChecker(
             EntityStore<MetadataClientState> metadataStore,
             IDatabaseFactory databaseFactory,
-            IMemoryCache memoryCache)
+            IDistributedCache distributedCache)
         {
             this.metadataStore = metadataStore;
             this.databaseFactory = databaseFactory;
-            this.memoryCache = memoryCache;
+            this.distributedCache = distributedCache;
         }
 
         public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
@@ -60,16 +63,25 @@ namespace osu.Server.Spectator.Hubs.Filters
                 throw new InvalidVersionException();
         }
 
-        private bool shouldCheckVersionFor(Hub hub) => memoryCache.GetOrCreate(
-            $"hub:{hub.GetType().ReadableName()}",
-            _ => hub.GetType().GetCustomAttribute<CheckClientVersionAttribute>() != null);
+        private static bool shouldCheckVersionFor(Hub hub)
+            => hub_requires_version_check.GetOrAdd(hub.GetType(), h => h.GetCustomAttribute<CheckClientVersionAttribute>() != null);
 
-        private Task<osu_build?> getBuildByHash(string hash) => memoryCache.GetOrCreateAsync<osu_build?>($"build:{hash}", async entry =>
+        private async Task<osu_build?> getBuildByHash(string hash)
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            using (var db = databaseFactory.GetInstance())
-                return await db.GetLazerBuildByHashAsync(hash);
-        });
+            string cacheKey = $"build:{hash}";
+            string? buildJson = await distributedCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(buildJson))
+                return JsonConvert.DeserializeObject<osu_build>(buildJson);
+
+            using var db = databaseFactory.GetInstance();
+            var build = await db.GetLazerBuildByHashAsync(hash);
+            await distributedCache.SetStringAsync(cacheKey, JsonConvert.SerializeObject(build), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
+            return build;
+        }
 
         public class InvalidVersionException : HubException
         {
