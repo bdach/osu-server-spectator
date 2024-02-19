@@ -16,7 +16,7 @@ using osu.Server.Spectator.Hubs.Metadata;
 
 namespace osu.Server.Spectator.Hubs.Filters
 {
-    public class ClientVersionChecker : StatefulHubConnectionController
+    public class ClientVersionChecker : IHubFilter
     {
         private static readonly ConcurrentDictionary<Type, bool> hub_requires_version_check = new ConcurrentDictionary<Type, bool>();
 
@@ -25,25 +25,22 @@ namespace osu.Server.Spectator.Hubs.Filters
         private readonly IDistributedCache distributedCache;
 
         public ClientVersionChecker(
-            EntityStore<ConnectionState> connectionStates,
-            IServiceProvider serviceProvider,
             EntityStore<MetadataClientState> metadataStore,
             IDatabaseFactory databaseFactory,
             IDistributedCache distributedCache)
-            : base(connectionStates, serviceProvider)
         {
             this.metadataStore = metadataStore;
             this.databaseFactory = databaseFactory;
             this.distributedCache = distributedCache;
         }
 
-        public override async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
+        public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
         {
             await checkVersion(context.Hub, context.Context);
             await next(context);
         }
 
-        public override async ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
+        public async ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
         {
             await checkVersion(invocationContext.Hub, invocationContext.Context);
             return await next(invocationContext);
@@ -57,22 +54,13 @@ namespace osu.Server.Spectator.Hubs.Filters
             if (!shouldCheckVersionFor(hub))
                 return;
 
-            int userId = hubCallerContext.GetUserId();
-            var clientMetadata = metadataStore.GetEntityUnsafe(userId);
-
+            var clientMetadata = metadataStore.GetEntityUnsafe(hubCallerContext.GetUserId());
             if (string.IsNullOrEmpty(clientMetadata?.VersionHash))
-            {
-                await DisconnectClientFromAllStatefulHubsAsync(userId);
-                return;
-            }
+                throw new InvalidVersionException();
 
             var build = await getBuildByHash(clientMetadata.VersionHash);
-
             if (build == null || !build.allow_bancho)
-            {
-                await DisconnectClientFromAllStatefulHubsAsync(userId);
-                return;
-            }
+                throw new InvalidVersionException();
         }
 
         private static bool shouldCheckVersionFor(Hub hub)
@@ -93,6 +81,14 @@ namespace osu.Server.Spectator.Hubs.Filters
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
             });
             return build;
+        }
+
+        public class InvalidVersionException : HubException
+        {
+            public InvalidVersionException()
+                : base("You cannot play online on this version of osu!. Please ensure that you are using the latest version of the official game releases.")
+            {
+            }
         }
     }
 }
