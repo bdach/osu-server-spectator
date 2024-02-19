@@ -7,7 +7,9 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
+using osu.Game.Online;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
@@ -23,44 +25,68 @@ namespace osu.Server.Spectator.Hubs.Filters
         private readonly EntityStore<MetadataClientState> metadataStore;
         private readonly IDatabaseFactory databaseFactory;
         private readonly IDistributedCache distributedCache;
+        private readonly IServiceProvider serviceProvider;
 
         public ClientVersionChecker(
             EntityStore<MetadataClientState> metadataStore,
             IDatabaseFactory databaseFactory,
-            IDistributedCache distributedCache)
+            IDistributedCache distributedCache,
+            IServiceProvider serviceProvider)
         {
             this.metadataStore = metadataStore;
             this.databaseFactory = databaseFactory;
             this.distributedCache = distributedCache;
+            this.serviceProvider = serviceProvider;
         }
 
         public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
         {
-            await checkVersion(context.Hub, context.Context);
-            await next(context);
+            if (await isValidVersion(context.Hub, context.Context))
+                await next(context);
         }
 
         public async ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
         {
-            await checkVersion(invocationContext.Hub, invocationContext.Context);
-            return await next(invocationContext);
+            if (await isValidVersion(invocationContext.Hub, invocationContext.Context))
+                return await next(invocationContext);
+            else
+                return new ValueTask();
         }
 
-        private async Task checkVersion(Hub hub, HubCallerContext hubCallerContext)
+        private async Task<bool> isValidVersion(Hub hub, HubCallerContext hubCallerContext)
         {
             if (!AppSettings.CheckClientVersion)
-                return;
+                return true;
 
             if (!shouldCheckVersionFor(hub))
-                return;
+                return true;
 
             var clientMetadata = metadataStore.GetEntityUnsafe(hubCallerContext.GetUserId());
+
             if (string.IsNullOrEmpty(clientMetadata?.VersionHash))
-                throw new InvalidVersionException();
+            {
+                await requestDisconnect(hub, hubCallerContext);
+                return false;
+            }
 
             var build = await getBuildByHash(clientMetadata.VersionHash);
+
             if (build == null || !build.allow_bancho)
-                throw new InvalidVersionException();
+            {
+                await requestDisconnect(hub, hubCallerContext);
+                return false;
+            }
+
+            return true;
+        }
+
+        private async Task requestDisconnect(Hub hub, HubCallerContext callerContext)
+        {
+            var hubContextType = typeof(IHubContext<>).MakeGenericType(hub.GetType());
+            var hubContext = (serviceProvider.GetRequiredService(hubContextType) as IHubContext)!;
+
+            await hubContext.Clients.Client(callerContext.ConnectionId)
+                            .SendCoreAsync(nameof(IStatefulUserHubClient.DisconnectRequested), new[] { "test" });
         }
 
         private static bool shouldCheckVersionFor(Hub hub)
@@ -81,14 +107,6 @@ namespace osu.Server.Spectator.Hubs.Filters
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
             });
             return build;
-        }
-
-        public class InvalidVersionException : HubException
-        {
-            public InvalidVersionException()
-                : base("You cannot play online on this version of osu!. Please ensure that you are using the latest version of the official game releases.")
-            {
-            }
         }
     }
 }
