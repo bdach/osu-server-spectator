@@ -71,11 +71,27 @@ namespace osu.Server.Spectator.Hubs.Metadata
             }
 
             var activeRoom = activeRooms.FirstOrDefault();
+            var newInfo = new BeatmapOfTheDayInfo { RoomID = activeRoom?.id };
 
-            if (Current.RoomID != activeRoom?.id)
+            if (newInfo.RoomID != null)
             {
-                logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {0} to {1}", Current.RoomID, activeRoom?.id);
-                Current = new BeatmapOfTheDayInfo { RoomID = activeRoom?.id };
+                var playlistItems = await db.GetAllPlaylistItemsAsync(newInfo.RoomID.Value);
+
+                if (playlistItems.Length != 1)
+                {
+                    logger.LogWarning("'Beatmap of the day' room with ID {0} is in unexpected state ({1} playlist items inside). Not broadcasting.", newInfo.RoomID, playlistItems.Length);
+                    newInfo = new BeatmapOfTheDayInfo { RoomID = null, BeatmapID = null };
+                }
+                else
+                {
+                    newInfo.BeatmapID = playlistItems.Single().beatmap_id;
+                }
+            }
+
+            if (!Current.Equals(newInfo))
+            {
+                logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {0} to {1}", Current.RoomID, newInfo.RoomID);
+                Current = newInfo;
                 await hubContext.Clients.All.SendAsync(nameof(IMetadataClient.BeatmapOfTheDayUpdated), Current, cancellationToken);
             }
         }
