@@ -15,7 +15,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
 {
     public interface IBeatmapOfTheDayUpdater : IHostedService
     {
-        BeatmapOfTheDayInfo Current { get; }
+        BeatmapOfTheDayInfo? Current { get; }
     }
 
     public class BeatmapOfTheDayUpdater : BackgroundService, IBeatmapOfTheDayUpdater
@@ -25,7 +25,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
         /// </summary>
         public int UpdateInterval = 300_000;
 
-        public BeatmapOfTheDayInfo Current { get; private set; } = new BeatmapOfTheDayInfo();
+        public BeatmapOfTheDayInfo? Current { get; private set; }
 
         private readonly ILogger logger;
         private readonly IDatabaseFactory databaseFactory;
@@ -70,27 +70,29 @@ namespace osu.Server.Spectator.Hubs.Metadata
                     string.Join(',', activeRooms.Select(room => room.id)));
             }
 
-            var activeRoom = activeRooms.FirstOrDefault();
-            var newInfo = new BeatmapOfTheDayInfo { RoomID = activeRoom?.id };
+            BeatmapOfTheDayInfo? newInfo = null;
 
-            if (newInfo.RoomID != null)
+            var activeRoom = activeRooms.FirstOrDefault();
+
+            if (activeRoom?.id != null)
             {
-                var playlistItems = await db.GetAllPlaylistItemsAsync(newInfo.RoomID.Value);
+                newInfo = new BeatmapOfTheDayInfo { RoomID = activeRoom.id };
+                var playlistItems = await db.GetAllPlaylistItemsAsync(newInfo.Value.RoomID);
 
                 if (playlistItems.Length != 1)
                 {
-                    logger.LogWarning("'Beatmap of the day' room with ID {0} is in unexpected state ({1} playlist items inside). Not broadcasting.", newInfo.RoomID, playlistItems.Length);
-                    newInfo = new BeatmapOfTheDayInfo { RoomID = null, BeatmapID = null };
+                    logger.LogWarning("'Beatmap of the day' room with ID {0} is in unexpected state ({1} playlist items inside). Not broadcasting.", newInfo.Value.RoomID, playlistItems.Length);
+                    newInfo = null;
                 }
                 else
                 {
-                    newInfo.BeatmapID = playlistItems.Single().beatmap_id;
+                    newInfo = newInfo.Value with { BeatmapID = playlistItems.Single().beatmap_id };
                 }
             }
 
             if (!Current.Equals(newInfo))
             {
-                logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {0} to {1}", Current.RoomID, newInfo.RoomID);
+                logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {0} to {1}", Current?.RoomID, newInfo?.RoomID);
                 Current = newInfo;
                 await hubContext.Clients.All.SendAsync(nameof(IMetadataClient.BeatmapOfTheDayUpdated), Current, cancellationToken);
             }

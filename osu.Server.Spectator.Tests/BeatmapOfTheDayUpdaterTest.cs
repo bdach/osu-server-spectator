@@ -58,12 +58,12 @@ namespace osu.Server.Spectator.Tests
 
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
                     nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo)args![0]).RoomID == 4),
+                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).Value.RoomID == 4),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
                     nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo)args![0]).BeatmapID == 1001),
+                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).Value.BeatmapID == 1001),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
@@ -73,12 +73,7 @@ namespace osu.Server.Spectator.Tests
 
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
                     nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo)args![0]).RoomID == null),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-            allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo)args![0]).BeatmapID == null),
+                    It.Is<object?[]>(args => args[0] == null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
@@ -90,12 +85,12 @@ namespace osu.Server.Spectator.Tests
 
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
                     nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo)args![0]).RoomID == 5),
+                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).HasValue && ((BeatmapOfTheDayInfo?)args[0]).Value.RoomID == 5),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
                     nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo)args![0]).BeatmapID == 1002),
+                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).HasValue && ((BeatmapOfTheDayInfo?)args![0]).Value.BeatmapID == 1002),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
