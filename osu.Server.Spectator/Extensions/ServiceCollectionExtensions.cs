@@ -30,7 +30,7 @@ namespace osu.Server.Spectator.Extensions
                                     .AddSingleton<BuildUserCountUpdater>()
                                     .AddSingleton<ChatFilters>()
                                     .AddSingleton<BeatmapOfTheDayUpdater>()
-                                    .AddHostedService<BeatmapOfTheDayUpdater>(ctx => ctx.GetRequiredService<BeatmapOfTheDayUpdater>());
+                                    .AddHostedService<IBeatmapOfTheDayUpdater>(ctx => ctx.GetRequiredService<BeatmapOfTheDayUpdater>());
         }
 
         /// <summary>

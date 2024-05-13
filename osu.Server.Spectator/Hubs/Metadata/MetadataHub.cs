@@ -17,7 +17,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
     public class MetadataHub : StatefulUserHub<IMetadataClient, MetadataClientState>, IMetadataServer
     {
         private readonly IDatabaseFactory databaseFactory;
-        private readonly BeatmapOfTheDayUpdater beatmapOfTheDayUpdater;
+        private readonly IBeatmapOfTheDayUpdater beatmapOfTheDayUpdater;
 
         internal const string ONLINE_PRESENCE_WATCHERS_GROUP = "metadata:online-presence-watchers";
 
@@ -25,7 +25,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
             IDistributedCache cache,
             EntityStore<MetadataClientState> userStates,
             IDatabaseFactory databaseFactory,
-            BeatmapOfTheDayUpdater beatmapOfTheDayUpdater)
+            IBeatmapOfTheDayUpdater beatmapOfTheDayUpdater)
             : base(cache, userStates)
         {
             this.databaseFactory = databaseFactory;

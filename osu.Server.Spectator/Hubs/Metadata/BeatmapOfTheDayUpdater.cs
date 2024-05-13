@@ -13,7 +13,12 @@ using osu.Server.Spectator.Database;
 
 namespace osu.Server.Spectator.Hubs.Metadata
 {
-    public class BeatmapOfTheDayUpdater : BackgroundService
+    public interface IBeatmapOfTheDayUpdater : IHostedService
+    {
+        BeatmapOfTheDayInfo Current { get; }
+    }
+
+    public class BeatmapOfTheDayUpdater : BackgroundService, IBeatmapOfTheDayUpdater
     {
         /// <summary>
         /// Amount of time (in milliseconds) between subsequent polls for the current beatmap of the day.
