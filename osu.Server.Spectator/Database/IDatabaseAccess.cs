@@ -164,9 +164,8 @@ namespace osu.Server.Spectator.Database
         Task<IEnumerable<chat_filter>> GetAllChatFiltersAsync();
 
         /// <summary>
-        /// Retrieves all active rooms
+        /// Retrieves all active rooms from the <see cref="room_category.daily_challenge"/> category.
         /// </summary>
-        /// <returns></returns>
-        Task<IEnumerable<multiplayer_room>> GetActiveBeatmapOfTheDayRoomsAsync();
+        Task<IEnumerable<multiplayer_room>> GetActiveDailyChallengeRoomsAsync();
     }
 }

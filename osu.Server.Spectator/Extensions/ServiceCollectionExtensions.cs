@@ -29,8 +29,8 @@ namespace osu.Server.Spectator.Extensions
                                     .AddSingleton<IScoreProcessedSubscriber, ScoreProcessedSubscriber>()
                                     .AddSingleton<BuildUserCountUpdater>()
                                     .AddSingleton<ChatFilters>()
-                                    .AddSingleton<IBeatmapOfTheDayUpdater, BeatmapOfTheDayUpdater>()
-                                    .AddHostedService<IBeatmapOfTheDayUpdater>(ctx => ctx.GetRequiredService<IBeatmapOfTheDayUpdater>());
+                                    .AddSingleton<IDailyChallengeUpdater, DailyChallengeUpdater>()
+                                    .AddHostedService<IDailyChallengeUpdater>(ctx => ctx.GetRequiredService<IDailyChallengeUpdater>());
         }
 
         /// <summary>

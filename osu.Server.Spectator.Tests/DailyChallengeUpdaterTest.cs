@@ -14,7 +14,7 @@ using Xunit;
 
 namespace osu.Server.Spectator.Tests
 {
-    public class BeatmapOfTheDayUpdaterTest
+    public class DailyChallengeUpdaterTest
     {
         private readonly Mock<ILoggerFactory> loggerFactoryMock;
         private readonly Mock<IDatabaseFactory> databaseFactoryMock;
@@ -22,7 +22,7 @@ namespace osu.Server.Spectator.Tests
         private readonly Mock<IHubContext<MetadataHub>> metadataHubContextMock;
         private readonly Mock<IClientProxy> allClientsProxy;
 
-        public BeatmapOfTheDayUpdaterTest()
+        public DailyChallengeUpdaterTest()
         {
             loggerFactoryMock = new Mock<ILoggerFactory>();
             loggerFactoryMock.Setup(factory => factory.CreateLogger(It.IsAny<string>()))
@@ -40,12 +40,12 @@ namespace osu.Server.Spectator.Tests
         [Fact]
         public async Task TestChangeTracking()
         {
-            databaseAccessMock.Setup(db => db.GetActiveBeatmapOfTheDayRoomsAsync())
-                              .ReturnsAsync([new multiplayer_room { id = 4, category = room_category.beatmap_of_the_day }]);
+            databaseAccessMock.Setup(db => db.GetActiveDailyChallengeRoomsAsync())
+                              .ReturnsAsync([new multiplayer_room { id = 4, category = room_category.daily_challenge }]);
             databaseAccessMock.Setup(db => db.GetAllPlaylistItemsAsync(4))
                               .ReturnsAsync([new multiplayer_playlist_item { beatmap_id = 1001 }]);
 
-            var updater = new BeatmapOfTheDayUpdater(
+            var updater = new DailyChallengeUpdater(
                 loggerFactoryMock.Object,
                 databaseFactoryMock.Object,
                 metadataHubContextMock.Object)
@@ -57,40 +57,40 @@ namespace osu.Server.Spectator.Tests
             await Task.Delay(100);
 
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).Value.RoomID == 4),
+                    nameof(IMetadataClient.DailyChallengeUpdated),
+                    It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).Value.RoomID == 4),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).Value.BeatmapID == 1001),
+                    nameof(IMetadataClient.DailyChallengeUpdated),
+                    It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).Value.BeatmapID == 1001),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
-            databaseAccessMock.Setup(db => db.GetActiveBeatmapOfTheDayRoomsAsync())
+            databaseAccessMock.Setup(db => db.GetActiveDailyChallengeRoomsAsync())
                               .ReturnsAsync([]);
             await Task.Delay(100);
 
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.BeatmapOfTheDayUpdated),
+                    nameof(IMetadataClient.DailyChallengeUpdated),
                     It.Is<object?[]>(args => args[0] == null),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
-            databaseAccessMock.Setup(db => db.GetActiveBeatmapOfTheDayRoomsAsync())
-                              .ReturnsAsync([new multiplayer_room { id = 5, category = room_category.beatmap_of_the_day }]);
+            databaseAccessMock.Setup(db => db.GetActiveDailyChallengeRoomsAsync())
+                              .ReturnsAsync([new multiplayer_room { id = 5, category = room_category.daily_challenge }]);
             databaseAccessMock.Setup(db => db.GetAllPlaylistItemsAsync(5))
                               .ReturnsAsync([new multiplayer_playlist_item { beatmap_id = 1002 }]);
             await Task.Delay(100);
 
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).HasValue && ((BeatmapOfTheDayInfo?)args[0]).Value.RoomID == 5),
+                    nameof(IMetadataClient.DailyChallengeUpdated),
+                    It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).HasValue && ((DailyChallengeInfo?)args[0]).Value.RoomID == 5),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.BeatmapOfTheDayUpdated),
-                    It.Is<object[]>(args => ((BeatmapOfTheDayInfo?)args![0]).HasValue && ((BeatmapOfTheDayInfo?)args![0]).Value.BeatmapID == 1002),
+                    nameof(IMetadataClient.DailyChallengeUpdated),
+                    It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).HasValue && ((DailyChallengeInfo?)args[0]).Value.BeatmapID == 1002),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 

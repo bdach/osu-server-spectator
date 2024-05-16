@@ -370,13 +370,13 @@ namespace osu.Server.Spectator.Database
             return await connection.QueryAsync<chat_filter>("SELECT * FROM `chat_filters`");
         }
 
-        public async Task<IEnumerable<multiplayer_room>> GetActiveBeatmapOfTheDayRoomsAsync()
+        public async Task<IEnumerable<multiplayer_room>> GetActiveDailyChallengeRoomsAsync()
         {
             var connection = await getConnectionAsync();
 
             return await connection.QueryAsync<multiplayer_room>(
                 "SELECT * FROM `multiplayer_rooms` "
-                + "WHERE `category` = 'beatmap_of_the_day' "
+                + "WHERE `category` = 'daily_challenge' "
                 + "AND `type` = 'playlists' "
                 + "AND `starts_at` <= NOW() "
                 + "AND `ends_at` > NOW()");

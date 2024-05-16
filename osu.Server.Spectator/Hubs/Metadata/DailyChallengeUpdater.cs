@@ -13,30 +13,30 @@ using osu.Server.Spectator.Database;
 
 namespace osu.Server.Spectator.Hubs.Metadata
 {
-    public interface IBeatmapOfTheDayUpdater : IHostedService
+    public interface IDailyChallengeUpdater : IHostedService
     {
-        BeatmapOfTheDayInfo? Current { get; }
+        DailyChallengeInfo? Current { get; }
     }
 
-    public class BeatmapOfTheDayUpdater : BackgroundService, IBeatmapOfTheDayUpdater
+    public class DailyChallengeUpdater : BackgroundService, IDailyChallengeUpdater
     {
         /// <summary>
         /// Amount of time (in milliseconds) between subsequent polls for the current beatmap of the day.
         /// </summary>
         public int UpdateInterval = 300_000;
 
-        public BeatmapOfTheDayInfo? Current { get; private set; }
+        public DailyChallengeInfo? Current { get; private set; }
 
         private readonly ILogger logger;
         private readonly IDatabaseFactory databaseFactory;
         private readonly IHubContext<MetadataHub> hubContext;
 
-        public BeatmapOfTheDayUpdater(
+        public DailyChallengeUpdater(
             ILoggerFactory loggerFactory,
             IDatabaseFactory databaseFactory,
             IHubContext<MetadataHub> hubContext)
         {
-            logger = loggerFactory.CreateLogger(nameof(BeatmapOfTheDayUpdater));
+            logger = loggerFactory.CreateLogger(nameof(DailyChallengeUpdater));
             this.databaseFactory = databaseFactory;
             this.hubContext = hubContext;
         }
@@ -47,7 +47,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
             {
                 try
                 {
-                    await updateBeatmapOfTheDayInfo(stoppingToken);
+                    await updateDailyChallengeInfo(stoppingToken);
                 }
                 catch (Exception ex)
                 {
@@ -58,11 +58,11 @@ namespace osu.Server.Spectator.Hubs.Metadata
             }
         }
 
-        private async Task updateBeatmapOfTheDayInfo(CancellationToken cancellationToken)
+        private async Task updateDailyChallengeInfo(CancellationToken cancellationToken)
         {
             using var db = databaseFactory.GetInstance();
 
-            var activeRooms = (await db.GetActiveBeatmapOfTheDayRoomsAsync()).ToList();
+            var activeRooms = (await db.GetActiveDailyChallengeRoomsAsync()).ToList();
 
             if (activeRooms.Count > 1)
             {
@@ -70,13 +70,13 @@ namespace osu.Server.Spectator.Hubs.Metadata
                     string.Join(',', activeRooms.Select(room => room.id)));
             }
 
-            BeatmapOfTheDayInfo? newInfo = null;
+            DailyChallengeInfo? newInfo = null;
 
             var activeRoom = activeRooms.FirstOrDefault();
 
             if (activeRoom?.id != null)
             {
-                newInfo = new BeatmapOfTheDayInfo { RoomID = activeRoom.id };
+                newInfo = new DailyChallengeInfo { RoomID = activeRoom.id };
                 var playlistItems = await db.GetAllPlaylistItemsAsync(newInfo.Value.RoomID);
 
                 if (playlistItems.Length != 1)
@@ -94,7 +94,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
             {
                 logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {0} to {1}", Current?.RoomID, newInfo?.RoomID);
                 Current = newInfo;
-                await hubContext.Clients.All.SendAsync(nameof(IMetadataClient.BeatmapOfTheDayUpdated), Current, cancellationToken);
+                await hubContext.Clients.All.SendAsync(nameof(IMetadataClient.DailyChallengeUpdated), Current, cancellationToken);
             }
         }
     }

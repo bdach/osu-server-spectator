@@ -12,6 +12,6 @@ namespace osu.Server.Spectator.Database.Models
         normal,
         spotlights,
         featured_artist,
-        beatmap_of_the_day,
+        daily_challenge,
     }
 }
