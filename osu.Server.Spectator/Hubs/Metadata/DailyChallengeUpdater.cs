@@ -23,7 +23,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
         /// <summary>
         /// Amount of time (in milliseconds) between subsequent polls for the current beatmap of the day.
         /// </summary>
-        public int UpdateInterval = 300_000;
+        public int UpdateInterval = 10_000;
 
         public DailyChallengeInfo? Current { get; private set; }
 
@@ -75,20 +75,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
             var activeRoom = activeRooms.FirstOrDefault();
 
             if (activeRoom?.id != null)
-            {
                 newInfo = new DailyChallengeInfo { RoomID = activeRoom.id };
-                var playlistItems = await db.GetAllPlaylistItemsAsync(newInfo.Value.RoomID);
-
-                if (playlistItems.Length != 1)
-                {
-                    logger.LogWarning("'Beatmap of the day' room with ID {roomId} is in unexpected state ({itemCount} playlist items inside). Not broadcasting.", newInfo.Value.RoomID, playlistItems.Length);
-                    newInfo = null;
-                }
-                else
-                {
-                    newInfo = newInfo.Value with { BeatmapID = playlistItems.Single().beatmap_id };
-                }
-            }
 
             if (!Current.Equals(newInfo))
             {

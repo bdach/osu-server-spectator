@@ -61,11 +61,6 @@ namespace osu.Server.Spectator.Tests
                     It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).Value.RoomID == 4),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
-            allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.DailyChallengeUpdated),
-                    It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).Value.BeatmapID == 1001),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
 
             databaseAccessMock.Setup(db => db.GetActiveDailyChallengeRoomsAsync())
                               .ReturnsAsync([]);
@@ -86,11 +81,6 @@ namespace osu.Server.Spectator.Tests
             allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
                     nameof(IMetadataClient.DailyChallengeUpdated),
                     It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).HasValue && ((DailyChallengeInfo?)args[0]).Value.RoomID == 5),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-            allClientsProxy.Verify(proxy => proxy.SendCoreAsync(
-                    nameof(IMetadataClient.DailyChallengeUpdated),
-                    It.Is<object[]>(args => ((DailyChallengeInfo?)args![0]).HasValue && ((DailyChallengeInfo?)args[0]).Value.BeatmapID == 1002),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
