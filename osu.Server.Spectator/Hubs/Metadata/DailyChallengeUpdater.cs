@@ -81,7 +81,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
 
                 if (playlistItems.Length != 1)
                 {
-                    logger.LogWarning("'Beatmap of the day' room with ID {0} is in unexpected state ({1} playlist items inside). Not broadcasting.", newInfo.Value.RoomID, playlistItems.Length);
+                    logger.LogWarning("'Beatmap of the day' room with ID {roomId} is in unexpected state ({itemCount} playlist items inside). Not broadcasting.", newInfo.Value.RoomID, playlistItems.Length);
                     newInfo = null;
                 }
                 else
@@ -92,7 +92,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
 
             if (!Current.Equals(newInfo))
             {
-                logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {0} to {1}", Current?.RoomID, newInfo?.RoomID);
+                logger.LogInformation("Broadcasting 'beatmap of the day' room change from id {oldRoomID} to {newRoomId}", Current?.RoomID, newInfo?.RoomID);
                 Current = newInfo;
                 await hubContext.Clients.All.SendAsync(nameof(IMetadataClient.DailyChallengeUpdated), Current, cancellationToken);
             }
