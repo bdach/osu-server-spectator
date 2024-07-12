@@ -174,8 +174,8 @@ namespace osu.Server.Spectator.Hubs
                         break;
                     }
 
-                    Log($"[{nameof(SendHeader)}] Updating current token ID on user request.");
-                    connectionState.Item.TokenId = claim.Value;
+                    Log($"[{nameof(SendHeader)}] Adding new token ID on user request.");
+                    connectionState.Item.TokenIds.Add(claim.Value);
                     break;
                 }
             }

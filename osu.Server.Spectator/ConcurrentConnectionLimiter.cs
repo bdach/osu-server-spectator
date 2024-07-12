@@ -55,7 +55,7 @@ namespace osu.Server.Spectator
                     return;
                 }
 
-                if (context.Context.GetTokenId() == userState.Item.TokenId)
+                if (userState.Item.TokenIds.Contains(context.Context.GetTokenId()))
                 {
                     // The assumption is that the client has already dropped the old connection,
                     // so we don't bother to ask for a disconnection.
@@ -110,7 +110,7 @@ namespace osu.Server.Spectator
             {
                 string? registeredConnectionId = null;
 
-                bool tokenIdMatches = invocationContext.Context.GetTokenId() == userState.Item?.TokenId;
+                bool tokenIdMatches = userState.Item?.TokenIds.Contains(invocationContext.Context.GetTokenId()) == true;
                 bool hubRegistered = userState.Item?.ConnectionIds.TryGetValue(invocationContext.Hub.GetType(), out registeredConnectionId) == true;
                 bool connectionIdMatches = registeredConnectionId == invocationContext.Context.ConnectionId;
 
@@ -140,7 +140,7 @@ namespace osu.Server.Spectator
             {
                 string? registeredConnectionId = null;
 
-                bool tokenIdMatches = context.Context.GetTokenId() == userState.Item?.TokenId;
+                bool tokenIdMatches = userState.Item?.TokenIds.Contains(context.Context.GetTokenId()) == true;
                 bool hubRegistered = userState.Item?.ConnectionIds.TryGetValue(context.Hub.GetType(), out registeredConnectionId) == true;
                 bool connectionIdMatches = registeredConnectionId == context.Context.ConnectionId;
 
