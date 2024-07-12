@@ -17,7 +17,7 @@ namespace osu.Server.Spectator.Entities
         /// The unique ID of the JWT the user is using to authenticate.
         /// This is used to control user uniqueness.
         /// </summary>
-        public readonly string TokenId;
+        public string TokenId;
 
         /// <summary>
         /// The connection IDs of the user for each hub type.

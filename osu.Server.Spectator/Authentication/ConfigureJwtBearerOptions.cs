@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
@@ -43,26 +44,33 @@ namespace osu.Server.Spectator.Authentication
             {
                 OnTokenValidated = async context =>
                 {
-                    var jwtToken = (JsonWebToken)context.SecurityToken;
-                    int tokenUserId = int.Parse(jwtToken.Subject);
-
-                    using (var db = databaseFactory.GetInstance())
-                    {
-                        // check expiry/revocation against database
-                        var userId = await db.GetUserIdFromTokenAsync(jwtToken);
-
-                        if (userId != tokenUserId)
-                        {
-                            loggerFactory.CreateLogger("JsonWebToken").LogInformation("Token revoked or expired");
-                            context.Fail("Token has expired or been revoked");
-                        }
-                    }
+                    if (!await IsTokenValid((JsonWebToken)context.SecurityToken))
+                        context.Fail("Token has expired or been revoked");
                 },
             };
         }
 
         public void Configure(string? name, JwtBearerOptions options)
             => Configure(options);
+
+        public async Task<bool> IsTokenValid(JsonWebToken jwtToken)
+        {
+            int tokenUserId = int.Parse(jwtToken.Subject);
+
+            using (var db = databaseFactory.GetInstance())
+            {
+                // check expiry/revocation against database
+                int? userId = await db.GetUserIdFromTokenAsync(jwtToken);
+
+                if (userId != tokenUserId)
+                {
+                    loggerFactory.CreateLogger("JsonWebToken").LogInformation("Token revoked or expired");
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         /// <summary>
         /// borrowed from https://stackoverflow.com/a/54323524

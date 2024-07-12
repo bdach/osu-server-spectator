@@ -15,14 +15,15 @@ namespace osu.Server.Spectator.Tests.Multiplayer
         public new MultiplayerHubContext HubContext => base.HubContext;
 
         public TestMultiplayerHub(
+            IDatabaseFactory databaseFactory,
             ILoggerFactory loggerFactory,
             IDistributedCache cache,
+            EntityStore<ConnectionState> connectionState,
             EntityStore<ServerMultiplayerRoom> rooms,
             EntityStore<MultiplayerClientState> users,
-            IDatabaseFactory databaseFactory,
             ChatFilters chatFilters,
             IHubContext<MultiplayerHub> hubContext)
-            : base(loggerFactory, cache, rooms, users, databaseFactory, chatFilters, hubContext)
+            : base(databaseFactory, loggerFactory, cache, connectionState, rooms, users, chatFilters, hubContext)
         {
         }
 

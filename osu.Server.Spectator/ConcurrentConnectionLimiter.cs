@@ -10,9 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using osu.Framework.Extensions.TypeExtensions;
 using osu.Game.Online;
+using osu.Game.Online.Multiplayer;
 using osu.Server.Spectator.Entities;
 using osu.Server.Spectator.Extensions;
-using osu.Server.Spectator.Hubs;
 
 namespace osu.Server.Spectator
 {
@@ -23,8 +23,8 @@ namespace osu.Server.Spectator
         private readonly IServiceProvider serviceProvider;
         private readonly ILogger logger;
 
-        private static readonly IEnumerable<Type> stateful_user_hubs
-            = typeof(IStatefulUserHub).Assembly.GetTypes().Where(type => typeof(IStatefulUserHub).IsAssignableFrom(type) && typeof(Hub).IsAssignableFrom(type) && !type.IsInterface && !type.IsAbstract).ToArray();
+        private static readonly HashSet<Type> stateful_user_hubs
+            = typeof(ConcurrentConnectionLimiter).Assembly.GetTypes().Where(type => typeof(IStatefulServer).IsAssignableFrom(type) && typeof(Hub).IsAssignableFrom(type) && !type.IsInterface && !type.IsAbstract).ToHashSet();
 
         public ConcurrentConnectionLimiter(
             EntityStore<ConnectionState> connectionStates,
@@ -96,6 +96,15 @@ namespace osu.Server.Spectator
         public async ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
         {
             int userId = invocationContext.Context.GetUserId();
+
+            if (invocationContext.Hub is IStatefulServer
+                && invocationContext.HubMethodName == nameof(IStatefulServer.SendHeader)
+                && invocationContext.HubMethodArguments[0] as string == IStatefulServer.TOKEN_HEADER)
+            {
+                // the client is trying to update its associated token ID with this request.
+                // checking against the old stored token at this point would be counterproductive.
+                return await next(invocationContext);
+            }
 
             using (var userState = await connectionStates.GetForUse(userId))
             {

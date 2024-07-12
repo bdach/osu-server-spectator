@@ -24,21 +24,20 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
     {
         protected readonly EntityStore<ServerMultiplayerRoom> Rooms;
         protected readonly MultiplayerHubContext HubContext;
-        private readonly IDatabaseFactory databaseFactory;
         private readonly ChatFilters chatFilters;
 
         public MultiplayerHub(
+            IDatabaseFactory databaseFactory,
             ILoggerFactory loggerFactory,
             IDistributedCache cache,
+            EntityStore<ConnectionState> connectionState,
             EntityStore<ServerMultiplayerRoom> rooms,
             EntityStore<MultiplayerClientState> users,
-            IDatabaseFactory databaseFactory,
             ChatFilters chatFilters,
             IHubContext<MultiplayerHub> hubContext)
-            : base(loggerFactory, cache, users)
+            : base(databaseFactory, loggerFactory, cache, users, connectionState)
         {
             Rooms = rooms;
-            this.databaseFactory = databaseFactory;
             this.chatFilters = chatFilters;
             HubContext = new MultiplayerHubContext(hubContext, rooms, users, loggerFactory);
         }
@@ -50,7 +49,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             Log($"Attempting to join room {roomId}");
 
             bool isRestricted;
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 isRestricted = await db.IsUserRestrictedAsync(Context.GetUserId());
 
             if (isRestricted)
@@ -175,7 +174,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             Log($"Retrieving room {roomId} from database");
 
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
             {
                 // TODO: this call should be transactional, and mark the room as managed by this server instance.
                 // This will allow for other instances to know not to reinitialise the room if the host arrives there.
@@ -205,7 +204,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     }
                 };
 
-                await room.Initialise(databaseFactory);
+                await room.Initialise(DatabaseFactory);
 
                 return room;
             }
@@ -218,7 +217,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             Log(room, "Host marking room active");
 
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 await db.MarkRoomActiveAsync(room);
         }
 
@@ -244,7 +243,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         public async Task InvitePlayer(int userId)
         {
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
             {
                 bool isRestricted = await db.IsUserRestrictedAsync(userId);
                 if (isRestricted)
@@ -692,31 +691,31 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             if (playlistItem == null)
                 throw new InvalidStateException("Attempted to select a playlist item not contained by the room.");
 
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 await db.UpdateRoomSettingsAsync(room);
         }
 
         private async Task updateDatabaseHost(MultiplayerRoom room)
         {
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 await db.UpdateRoomHostAsync(room);
         }
 
         private async Task endDatabaseMatch(MultiplayerRoom room)
         {
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 await db.EndMatchAsync(room);
         }
 
         private async Task addDatabaseUser(MultiplayerRoom room, MultiplayerRoomUser user)
         {
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 await db.AddRoomParticipantAsync(room, user);
         }
 
         private async Task removeDatabaseUser(MultiplayerRoom room, MultiplayerRoomUser user)
         {
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 await db.RemoveRoomParticipantAsync(room, user);
         }
 

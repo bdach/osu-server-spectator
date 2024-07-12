@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using osu.Game.Online;
+using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Entities;
 using osu.Server.Spectator.Extensions;
 using osu.Server.Spectator.Hubs;
@@ -37,7 +38,7 @@ namespace osu.Server.Spectator.Tests
             MemoryDistributedCache cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
             userStates = new EntityStore<ClientState>();
-            hub = new TestStatefulHub(loggerFactoryMock.Object, cache, userStates);
+            hub = new TestStatefulHub(new Mock<DatabaseFactory>().Object, loggerFactoryMock.Object, cache, userStates, new EntityStore<ConnectionState>());
 
             mockContext = new Mock<HubCallerContext>();
             mockContext.Setup(context => context.UserIdentifier).Returns(user_id.ToString());
@@ -113,8 +114,13 @@ namespace osu.Server.Spectator.Tests
 
         private class TestStatefulHub : StatefulUserHub<IStatefulUserHubClient, ClientState>
         {
-            public TestStatefulHub(ILoggerFactory loggerFactory, IDistributedCache cache, EntityStore<ClientState> userStates)
-                : base(loggerFactory, cache, userStates)
+            public TestStatefulHub(
+                IDatabaseFactory databaseFactory,
+                ILoggerFactory loggerFactory,
+                IDistributedCache cache,
+                EntityStore<ClientState> userStates,
+                EntityStore<ConnectionState> connectionStates)
+                : base(databaseFactory, loggerFactory, cache, userStates, connectionStates)
             {
             }
 

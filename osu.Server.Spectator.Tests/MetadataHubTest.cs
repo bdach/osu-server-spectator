@@ -34,6 +34,7 @@ namespace osu.Server.Spectator.Tests
         {
             var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
             userStates = new EntityStore<MetadataClientState>();
+            var connectionStates = new EntityStore<ConnectionState>();
 
             var mockDatabase = new Mock<IDatabaseAccess>();
             var databaseFactory = new Mock<IDatabaseFactory>();
@@ -43,10 +44,11 @@ namespace osu.Server.Spectator.Tests
                              .Returns(new Mock<ILogger>().Object);
 
             hub = new MetadataHub(
+                databaseFactory.Object,
                 loggerFactoryMock.Object,
                 cache,
                 userStates,
-                databaseFactory.Object,
+                connectionStates,
                 new Mock<IDailyChallengeUpdater>().Object,
                 new Mock<IScoreProcessedSubscriber>().Object);
 

@@ -32,20 +32,19 @@ namespace osu.Server.Spectator.Hubs.Spectator
         /// </summary>
         private const BeatmapOnlineStatus max_beatmap_status_for_replays = BeatmapOnlineStatus.Loved;
 
-        private readonly IDatabaseFactory databaseFactory;
         private readonly ScoreUploader scoreUploader;
         private readonly IScoreProcessedSubscriber scoreProcessedSubscriber;
 
         public SpectatorHub(
+            IDatabaseFactory databaseFactory,
             ILoggerFactory loggerFactory,
             IDistributedCache cache,
             EntityStore<SpectatorClientState> users,
-            IDatabaseFactory databaseFactory,
+            EntityStore<ConnectionState> connectionState,
             ScoreUploader scoreUploader,
             IScoreProcessedSubscriber scoreProcessedSubscriber)
-            : base(loggerFactory, cache, users)
+            : base(databaseFactory, loggerFactory, cache, users, connectionState)
         {
-            this.databaseFactory = databaseFactory;
             this.scoreUploader = scoreUploader;
             this.scoreProcessedSubscriber = scoreProcessedSubscriber;
         }
@@ -71,7 +70,7 @@ namespace osu.Server.Spectator.Hubs.Spectator
                 if (state.BeatmapID == null)
                     return;
 
-                using (var db = databaseFactory.GetInstance())
+                using (var db = DatabaseFactory.GetInstance())
                 {
                     database_beatmap? beatmap = await db.GetBeatmapAsync(state.BeatmapID.Value);
                     string? username = await db.GetUsernameAsync(Context.GetUserId());

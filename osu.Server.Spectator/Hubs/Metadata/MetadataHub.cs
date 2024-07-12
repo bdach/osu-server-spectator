@@ -18,7 +18,6 @@ namespace osu.Server.Spectator.Hubs.Metadata
 {
     public class MetadataHub : StatefulUserHub<IMetadataClient, MetadataClientState>, IMetadataServer
     {
-        private readonly IDatabaseFactory databaseFactory;
         private readonly IDailyChallengeUpdater dailyChallengeUpdater;
         private readonly IScoreProcessedSubscriber scoreProcessedSubscriber;
 
@@ -27,15 +26,15 @@ namespace osu.Server.Spectator.Hubs.Metadata
         internal static string MultiplayerRoomWatchersGroup(long roomId) => $"metadata:multiplayer-room-watchers:{roomId}";
 
         public MetadataHub(
+            IDatabaseFactory databaseFactory,
             ILoggerFactory loggerFactory,
             IDistributedCache cache,
             EntityStore<MetadataClientState> userStates,
-            IDatabaseFactory databaseFactory,
+            EntityStore<ConnectionState> connectionStates,
             IDailyChallengeUpdater dailyChallengeUpdater,
             IScoreProcessedSubscriber scoreProcessedSubscriber)
-            : base(loggerFactory, cache, userStates)
+            : base(databaseFactory, loggerFactory, cache, userStates, connectionStates)
         {
-            this.databaseFactory = databaseFactory;
             this.dailyChallengeUpdater = dailyChallengeUpdater;
             this.scoreProcessedSubscriber = scoreProcessedSubscriber;
         }
@@ -66,7 +65,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
 
         public async Task<BeatmapUpdates> GetChangesSince(int queueId)
         {
-            using (var db = databaseFactory.GetInstance())
+            using (var db = DatabaseFactory.GetInstance())
                 return await db.GetUpdatedBeatmapSets(queueId);
         }
 
@@ -111,7 +110,7 @@ namespace osu.Server.Spectator.Hubs.Metadata
             await Groups.AddToGroupAsync(Context.ConnectionId, MultiplayerRoomWatchersGroup(id));
             await scoreProcessedSubscriber.RegisterForMultiplayerRoomAsync(Context.GetUserId(), id);
 
-            using var db = databaseFactory.GetInstance();
+            using var db = DatabaseFactory.GetInstance();
             return await db.GetMultiplayerRoomStatsAsync(id);
         }
 

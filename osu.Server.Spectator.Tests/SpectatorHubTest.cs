@@ -68,7 +68,7 @@ namespace osu.Server.Spectator.Tests
 
             var mockScoreProcessedSubscriber = new Mock<IScoreProcessedSubscriber>();
 
-            hub = new SpectatorHub(loggerFactory.Object, cache, clientStates, databaseFactory.Object, scoreUploader, mockScoreProcessedSubscriber.Object);
+            hub = new SpectatorHub(databaseFactory.Object, loggerFactory.Object, cache, clientStates, new EntityStore<ConnectionState>(), scoreUploader, mockScoreProcessedSubscriber.Object);
         }
 
         [Fact]

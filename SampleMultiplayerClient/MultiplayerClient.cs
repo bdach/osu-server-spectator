@@ -261,5 +261,11 @@ namespace SampleMultiplayerClient
             Console.WriteLine("Disconnect requested");
             await LeaveRoom();
         }
+
+        Task IStatefulServer.SendHeader(string key, string value)
+        {
+            Console.WriteLine($"Header received ({key}={value})");
+            return Task.CompletedTask;
+        }
     }
 }
