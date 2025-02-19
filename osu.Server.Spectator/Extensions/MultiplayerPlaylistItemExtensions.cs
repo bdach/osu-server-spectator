@@ -7,6 +7,7 @@ using System.Linq;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Utils;
 
 namespace osu.Server.Spectator.Extensions
@@ -83,6 +84,17 @@ namespace osu.Server.Spectator.Extensions
 
             if (!ModUtils.CheckValidFreeModsForMultiplayer(allowedMods, out invalid))
                 throw new InvalidStateException($"Invalid free mods were selected: {string.Join(',', invalid.Select(m => m.Acronym))}");
+
+            if (item.Freestyle)
+            {
+                Mod[] invalidRequiredModsInFreestyle = requiredMods.Where(m => m.ValidForMultiplayerAsFreeMod).ToArray();
+
+                if (invalidRequiredModsInFreestyle.Length > 0)
+                    throw new InvalidStateException($"The following mods cannot be selected as required in freestyle: {string.Join(',', invalidRequiredModsInFreestyle.Select(m => m.Acronym))}");
+
+                if (allowedMods.Any())
+                    throw new InvalidStateException("Allowed mods cannot be specified in freestyle.");
+            }
 
             // check aggregate combinations with each allowed mod individually.
             foreach (var allowedMod in allowedMods)
