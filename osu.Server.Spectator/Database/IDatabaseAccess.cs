@@ -222,5 +222,7 @@ namespace osu.Server.Spectator.Database
         /// Gets the overall rank of user <paramref name="userId"/> in the room with <paramref name="roomId"/>.
         /// </summary>
         Task<int> GetUserRankInRoomAsync(long roomId, int userId);
+
+        Task RecordRoomEventAsync(multiplayer_room_event ev);
     }
 }

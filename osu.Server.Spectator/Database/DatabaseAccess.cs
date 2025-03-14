@@ -536,6 +536,15 @@ namespace osu.Server.Spectator.Database
                 });
         }
 
+        public async Task RecordRoomEventAsync(multiplayer_room_event ev)
+        {
+            var connection = await getConnectionAsync();
+
+            await connection.ExecuteAsync(
+                "INSERT INTO `multiplayer_room_events` (`room_id`, `event_type`, `playlist_item_id`, `user_id`, `timestamp`) VALUES (@room_id, @event_type, @playlist_item_id, @user_id, NOW())",
+                ev);
+        }
+
         public void Dispose()
         {
             openConnection?.Dispose();
