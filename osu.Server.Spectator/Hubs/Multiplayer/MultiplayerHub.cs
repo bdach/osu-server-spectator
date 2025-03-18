@@ -54,7 +54,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             Log($"{Context.GetUserId()} creating room");
 
             long roomId = await sharedInterop.CreateRoomAsync(Context.GetUserId(), room);
-            await multiplayerEventLogger.LogRoomCreatedAsync(roomId);
+            await multiplayerEventLogger.LogRoomCreatedAsync(roomId, Context.GetUserId());
 
             return await JoinRoomWithPassword(roomId, room.Settings.Password);
         }
@@ -790,7 +790,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             using (var db = databaseFactory.GetInstance())
                 await db.EndMatchAsync(room);
 
-            await multiplayerEventLogger.LogRoomDisbandedAsync(room.RoomID);
+            await multiplayerEventLogger.LogRoomDisbandedAsync(room.RoomID, Context.GetUserId());
         }
 
         private async Task addDatabaseUser(MultiplayerRoom room, MultiplayerRoomUser user)
