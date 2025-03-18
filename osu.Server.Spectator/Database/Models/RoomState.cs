@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace osu.Server.Spectator.Database.Models
 {
@@ -13,12 +14,14 @@ namespace osu.Server.Spectator.Database.Models
     public class RoomState
     {
         [JsonProperty("room_type")]
+        [JsonConverter(typeof(StringEnumConverter))]
         public database_match_type room_type { get; set; }
 
         [JsonProperty("teams")]
         public Dictionary<int, room_team>? teams { get; set; }
     }
 
+    [JsonConverter(typeof(StringEnumConverter))]
     public enum room_team
     {
         blue = 1,
