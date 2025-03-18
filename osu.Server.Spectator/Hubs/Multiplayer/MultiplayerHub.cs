@@ -564,6 +564,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             long roomId;
             long playlistItemId;
+            RoomState roomState;
 
             using (var userUsage = await GetOrCreateLocalUserState())
             using (var roomUsage = await getLocalUserRoom(userUsage.Item))
@@ -583,11 +584,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                 roomId = room.RoomID;
                 playlistItemId = room.Queue.CurrentItem.ID;
+                roomState = room.MatchTypeImplementation.GetRoomState();
 
                 await HubContext.StartMatch(room);
             }
 
-            await multiplayerEventLogger.LogGameStartedAsync(roomId, playlistItemId);
+            await multiplayerEventLogger.LogGameStartedAsync(roomId, playlistItemId, roomState);
         }
 
         public async Task AbortMatch()

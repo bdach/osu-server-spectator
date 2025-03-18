@@ -64,11 +64,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             room_id = roomId,
         });
 
-        public Task LogGameStartedAsync(long roomId, long playlistItemId) => logEvent(new multiplayer_room_event
+        public Task LogGameStartedAsync(long roomId, long playlistItemId, RoomState roomState) => logEvent(new multiplayer_room_event
         {
             event_type = multiplayer_room_event_type.game_started,
             playlist_item_id = playlistItemId,
             room_id = roomId,
+            RoomState = roomState
         });
 
         public Task LogGameAbortedAsync(long roomId, long playlistItemId) => logEvent(new multiplayer_room_event

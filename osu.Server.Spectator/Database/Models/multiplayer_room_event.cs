@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using Newtonsoft.Json;
 
 namespace osu.Server.Spectator.Database.Models
 {
@@ -27,5 +28,16 @@ namespace osu.Server.Spectator.Database.Models
         public multiplayer_room_event_type event_type { get; set; }
         public long? playlist_item_id { get; set; }
         public long? user_id { get; set; }
+
+        public RoomState? RoomState { get; set; }
+
+        public string? room_state
+        {
+            get => RoomState == null ? null : JsonConvert.SerializeObject(RoomState);
+            set =>
+                RoomState = string.IsNullOrEmpty(value)
+                    ? null
+                    : JsonConvert.DeserializeObject<RoomState?>(value);
+        }
     }
 }
