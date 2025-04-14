@@ -56,7 +56,7 @@ namespace osu.Server.Spectator.Authentication
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 IssuerSigningKey = new RsaSecurityKey(rsa),
-                ValidAudience = "5", // should match the client ID assigned to osu! in the osu-web target deploy.
+                ValidAudience = "1", // should match the client ID assigned to osu! in the osu-web target deploy.
                 // TODO: figure out why this isn't included in the token.
                 ValidateIssuer = false,
                 ValidIssuer = "https://osu.ppy.sh/"

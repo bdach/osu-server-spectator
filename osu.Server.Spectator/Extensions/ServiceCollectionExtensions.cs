@@ -30,7 +30,7 @@ namespace osu.Server.Spectator.Extensions
                                     .AddSingleton<EntityStore<RefereeClientState>>()
                                     .AddSingleton<GracefulShutdownManager>()
                                     .AddSingleton<MetadataBroadcaster>()
-                                    .AddSingleton<IScoreStorage, S3ScoreStorage>()
+                                    .AddSingleton<IScoreStorage, FileScoreStorage>()
                                     .AddSingleton<ScoreUploader>()
                                     .AddSingleton<IScoreProcessedSubscriber, ScoreProcessedSubscriber>()
                                     .AddSingleton<BuildUserCountUpdater>()

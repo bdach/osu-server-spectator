@@ -15,7 +15,16 @@
       "launchUrl": "spectator",
       "applicationUrl": "http://localhost:5009",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "SERVER_PORT": "8081",
+        "SENTRY_DSN": "https://00fb6f3feff18db07cd44e715579e3b3@o4506672946872320.ingest.us.sentry.io/4506672948707328",
+        "DB_USER": "osuweb",
+        "SHARED_INTEROP_SECRET": "cafebabe",
+        "SAVE_REPLAYS": "true",
+        "REPLAYS_PATH": "/Users/bdach/Documents/Work/open-source/osu-web/public/uploads-solo-replay",
+        "MATCHMAKING_RATING_INITIAL_RADIUS": "100000",
+        "MATCHMAKING_ROOM_SIZE": "2",
+        "MATCHMAKING_POOL_SIZE": "2"
       }
     }
   }
