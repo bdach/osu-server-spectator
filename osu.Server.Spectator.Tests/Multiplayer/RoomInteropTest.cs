@@ -19,25 +19,27 @@ namespace osu.Server.Spectator.Tests.Multiplayer
                        .ReturnsAsync(() => ROOM_ID);
 
             await Hub.CreateRoom(new MultiplayerRoom(0));
-            // TODO: probably will need to assert channel creation LIO invocation instead
-            //LegacyIO.Verify(io => io.CreateRoomAsync(USER_ID, It.IsAny<MultiplayerRoom>()), Times.Once);
-            LegacyIO.Verify(io => io.AddUserToRoomAsync(USER_ID, ROOM_ID, It.IsAny<string>()), Times.Once);
+            LegacyIO.Verify(io => io.CreateChatForRoomAsync(ROOM_ID, true), Times.Once);
 
             using (var usage = await Hub.GetRoom(ROOM_ID))
             {
                 Assert.NotNull(usage.Item);
                 Assert.Equal(USER_ID, usage.Item.Users.Single().UserID);
             }
+
+            SetUserContext(ContextUser2);
+            await Hub.JoinRoom(ROOM_ID);
+            LegacyIO.Verify(io => io.AddUserToRoomChatAsync(USER_ID_2, ROOM_ID, It.IsAny<string>()), Times.Once);
         }
 
         [Fact]
         public async Task LeaveRoom()
         {
             await Hub.JoinRoom(ROOM_ID);
-            LegacyIO.Verify(io => io.RemoveUserFromRoomAsync(USER_ID, ROOM_ID), Times.Never);
+            LegacyIO.Verify(io => io.RemoveUserFromRoomChatAsync(USER_ID, ROOM_ID), Times.Never);
 
             await Hub.LeaveRoom();
-            LegacyIO.Verify(io => io.RemoveUserFromRoomAsync(USER_ID, ROOM_ID), Times.Once);
+            LegacyIO.Verify(io => io.RemoveUserFromRoomChatAsync(USER_ID, ROOM_ID), Times.Once);
 
             await Assert.ThrowsAsync<KeyNotFoundException>(() => Hub.GetRoom(ROOM_ID));
         }
@@ -53,8 +55,8 @@ namespace osu.Server.Spectator.Tests.Multiplayer
             SetUserContext(ContextUser);
             await Hub.KickUser(USER_ID_2);
 
-            LegacyIO.Verify(io => io.RemoveUserFromRoomAsync(USER_ID, ROOM_ID), Times.Never);
-            LegacyIO.Verify(io => io.RemoveUserFromRoomAsync(USER_ID_2, ROOM_ID), Times.Once);
+            LegacyIO.Verify(io => io.RemoveUserFromRoomChatAsync(USER_ID, ROOM_ID), Times.Never);
+            LegacyIO.Verify(io => io.RemoveUserFromRoomChatAsync(USER_ID_2, ROOM_ID), Times.Once);
         }
     }
 }

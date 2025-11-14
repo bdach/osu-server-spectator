@@ -69,8 +69,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             // TODO: port `PlaylistItem::assertBeatmapsExist()`
 
             dbRoom.id = await db.CreateRoomAsync(dbRoom, playlistItems);
-            // TODO: figure out what about multiplayer channels
-            // (probably have them created by LIO still, just outside of criticality?)
 
             return dbRoom.id;
         }

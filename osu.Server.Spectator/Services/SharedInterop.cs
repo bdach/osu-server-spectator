@@ -142,15 +142,16 @@ namespace osu.Server.Spectator.Services
         // Methods below purposefully async-await on `runCommand()` calls rather than directly returning the underlying calls.
         // This is done for better readability of exception stacks. Directly returning the tasks elides the name of the proxying method.
 
-        public async Task<long> CreateRoomAsync(int hostUserId, MultiplayerRoom room)
+        public async Task CreateChatForRoomAsync(long roomId, bool addHost)
         {
-            return long.Parse(await runCommand(HttpMethod.Post, "multiplayer/rooms", Newtonsoft.Json.JsonConvert.SerializeObject(new RoomWithHostId(room)
+            await runCommand(HttpMethod.Post, "multiplayer/rooms", Newtonsoft.Json.JsonConvert.SerializeObject(new
             {
-                HostUserId = hostUserId
-            })));
+                room_id = roomId,
+                add_host = addHost
+            }));
         }
 
-        public async Task AddUserToRoomAsync(int userId, long roomId, string password)
+        public async Task AddUserToRoomChatAsync(int userId, long roomId, string password)
         {
             await runCommand(HttpMethod.Put, $"multiplayer/rooms/{roomId}/users/{userId}", new
             {
@@ -158,7 +159,7 @@ namespace osu.Server.Spectator.Services
             });
         }
 
-        public async Task RemoveUserFromRoomAsync(int userId, long roomId)
+        public async Task RemoveUserFromRoomChatAsync(int userId, long roomId)
         {
             await runCommand(HttpMethod.Delete, $"multiplayer/rooms/{roomId}/users/{userId}");
         }

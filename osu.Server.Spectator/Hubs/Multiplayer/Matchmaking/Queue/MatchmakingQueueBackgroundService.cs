@@ -20,6 +20,7 @@ using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Elo;
 using osu.Server.Spectator.Entities;
+using osu.Server.Spectator.Services;
 using StatsdClient;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
@@ -49,12 +50,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         private readonly IMultiplayerHubContext hubContext;
         private readonly ILogger logger;
         private readonly IMemoryCache memoryCache;
+        private readonly ISharedInterop sharedInterop;
 
         private DateTimeOffset lastLobbyUpdateTime = DateTimeOffset.UnixEpoch;
         private DateTimeOffset lastQueueRefreshTime = DateTimeOffset.UnixEpoch;
 
         public MatchmakingQueueBackgroundService(IHubContext<MultiplayerHub> hub, IDatabaseFactory databaseFactory, IMultiplayerRoomFactory roomFactory, ILoggerFactory loggerFactory,
-                                                 EntityStore<ServerMultiplayerRoom> rooms, IMultiplayerHubContext hubContext, IMemoryCache memoryCache)
+                                                 EntityStore<ServerMultiplayerRoom> rooms, IMultiplayerHubContext hubContext, IMemoryCache memoryCache, ISharedInterop sharedInterop)
         {
             this.hub = hub;
             this.roomFactory = roomFactory;
@@ -62,6 +64,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
             this.rooms = rooms;
             this.hubContext = hubContext;
             this.memoryCache = memoryCache;
+            this.sharedInterop = sharedInterop;
 
             logger = loggerFactory.CreateLogger(nameof(MatchmakingQueueBackgroundService));
         }
@@ -287,6 +290,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
 
                 foreach (var user in group.Users)
                     await hub.Groups.RemoveFromGroupAsync(user.Identifier, group.Identifier);
+
+                try
+                {
+                    await sharedInterop.CreateChatForRoomAsync(roomId, addHost: false);
+                }
+                catch
+                {
+                    // Errors are logged internally by SharedInterop.
+                }
             }
         }
 
