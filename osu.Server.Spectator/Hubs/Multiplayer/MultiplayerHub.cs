@@ -72,7 +72,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             using (var db = databaseFactory.GetInstance())
             {
                 if (await db.IsUserRestrictedAsync(Context.GetUserId()))
-                    throw new InvalidStateException("Can't join a room when restricted.");
+                    throw new InvalidStateException("Can't create a room when restricted.");
             }
 
             long roomId = await sharedInterop.CreateRoomAsync(Context.GetUserId(), room);

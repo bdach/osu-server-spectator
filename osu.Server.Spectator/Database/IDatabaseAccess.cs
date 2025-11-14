@@ -56,6 +56,19 @@ namespace osu.Server.Spectator.Database
         Task<database_beatmap[]> GetBeatmapsAsync(int beatmapSetId);
 
         /// <summary>
+        /// Creates the given <paramref name="room"/> with the given <paramref name="playlistItems"/> in the database.
+        /// </summary>
+        /// <remarks>
+        /// This does not:
+        /// <list type="bullet">
+        /// <item>join the host to the room (handled by subsequent spectator operations),</item>
+        /// <item>create the chat channel for this room (handled by web via shared interop).</item>
+        /// </list>
+        /// </remarks>
+        /// <returns>The ID of the created room.</returns>
+        Task<long> CreateRoomAsync(multiplayer_room room, ICollection<multiplayer_playlist_item> playlistItems);
+
+        /// <summary>
         /// Marks the given <paramref name="room"/> as active and accepting new players.
         /// </summary>
         Task MarkRoomActiveAsync(MultiplayerRoom room);

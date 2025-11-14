@@ -107,6 +107,47 @@ namespace osu.Server.Spectator.Database
                 })).ToArray();
         }
 
+        public async Task<long> CreateRoomAsync(multiplayer_room room, ICollection<multiplayer_playlist_item> playlistItems)
+        {
+            var connection = await getConnectionAsync();
+
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                long roomId = await connection.QuerySingleAsync<long>(
+                    """
+                    INSERT INTO `multiplayer_rooms`
+                        (`user_id`, `name`, `starts_at`, `ends_at`, `max_attempts`, `password`, `type`, `queue_mode`, `auto_start_duration`, `auto_skip`)
+                    VALUES
+                        (@user_id, @name, @starts_at, @ends_at, @max_attempts, @password, @type, @queue_mode, @auto_start_duration, @auto_skip);
+                    SELECT LAST_INSERT_ID();
+                    """,
+                    new
+                    {
+                        room.user_id,
+                        room.name,
+                        room.starts_at,
+                        room.ends_at,
+                        room.max_attempts,
+                        room.password,
+                        // https://github.com/DapperLib/Dapper/issues/813
+                        type = room.type.ToString(),
+                        queue_mode = room.queue_mode.ToString(),
+                        room.auto_start_duration,
+                        room.auto_skip
+                    },
+                    transaction);
+
+                foreach (var item in playlistItems)
+                {
+                    item.room_id = roomId;
+                    await insertPlaylistItem(item, connection, transaction);
+                }
+
+                await transaction.CommitAsync();
+                return roomId;
+            }
+        }
+
         public async Task MarkRoomActiveAsync(MultiplayerRoom room)
         {
             var connection = await getConnectionAsync();
@@ -264,12 +305,18 @@ namespace osu.Server.Spectator.Database
         {
             var connection = await getConnectionAsync();
 
+            await insertPlaylistItem(item, connection);
+
+            return await connection.QuerySingleAsync<long>("SELECT max(id) FROM multiplayer_playlist_items WHERE room_id = @room_id", item);
+        }
+
+        private static async Task insertPlaylistItem(multiplayer_playlist_item item, MySqlConnection connection, MySqlTransaction? transaction = null)
+        {
             await connection.ExecuteAsync(
                 "INSERT INTO multiplayer_playlist_items (owner_id, room_id, beatmap_id, ruleset_id, allowed_mods, required_mods, freestyle, playlist_order, created_at, updated_at)"
                 + " VALUES (@owner_id, @room_id, @beatmap_id, @ruleset_id, @allowed_mods, @required_mods, @freestyle, @playlist_order, NOW(), NOW())",
-                item);
-
-            return await connection.QuerySingleAsync<long>("SELECT max(id) FROM multiplayer_playlist_items WHERE room_id = @room_id", item);
+                item,
+                transaction);
         }
 
         public async Task UpdatePlaylistItemAsync(multiplayer_playlist_item item)

@@ -17,7 +17,7 @@ namespace osu.Server.Spectator.Database.Models
         public int channel_id { get; set; }
         public DateTimeOffset starts_at { get; set; }
         public DateTimeOffset? ends_at { get; set; }
-        public byte max_attempts { get; set; }
+        public byte? max_attempts { get; set; }
         public int participant_count { get; set; }
         public DateTimeOffset? created_at { get; set; }
         public DateTimeOffset? updated_at { get; set; }
