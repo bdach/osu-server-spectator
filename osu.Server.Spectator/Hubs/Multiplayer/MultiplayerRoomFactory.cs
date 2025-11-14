@@ -25,6 +25,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         public async Task<long> CreateRoomAsync(int hostId, MultiplayerRoom room)
         {
+            using var db = databaseFactory.GetInstance();
+
+            if (await db.IsUserRestrictedAsync(hostId))
+                throw new InvalidStateException("Can't create a room when restricted.");
+
             var dbRoom = new multiplayer_room
             {
                 name = await filters.FilterAsync(room.Settings.Name),
@@ -63,8 +68,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
             // TODO: port `PlaylistItem::assertBeatmapsExist()`
 
-            using (var db = databaseFactory.GetInstance())
-                dbRoom.id = await db.CreateRoomAsync(dbRoom, playlistItems);
+            dbRoom.id = await db.CreateRoomAsync(dbRoom, playlistItems);
             // TODO: figure out what about multiplayer channels
             // (probably have them created by LIO still, just outside of criticality?)
 

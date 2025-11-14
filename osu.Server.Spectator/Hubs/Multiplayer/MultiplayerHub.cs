@@ -30,6 +30,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         protected readonly EntityStore<ServerMultiplayerRoom> Rooms;
         protected readonly IMultiplayerHubContext HubContext;
         private readonly IDatabaseFactory databaseFactory;
+        private readonly IMultiplayerRoomFactory roomFactory;
         private readonly ChatFilters chatFilters;
         private readonly ISharedInterop sharedInterop;
         private readonly MultiplayerEventLogger multiplayerEventLogger;
@@ -40,6 +41,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             EntityStore<ServerMultiplayerRoom> rooms,
             EntityStore<MultiplayerClientState> users,
             IDatabaseFactory databaseFactory,
+            IMultiplayerRoomFactory roomFactory,
             ChatFilters chatFilters,
             IMultiplayerHubContext hubContext,
             ISharedInterop sharedInterop,
@@ -48,6 +50,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             : base(loggerFactory, users)
         {
             this.databaseFactory = databaseFactory;
+            this.roomFactory = roomFactory;
             this.chatFilters = chatFilters;
             this.sharedInterop = sharedInterop;
             this.multiplayerEventLogger = multiplayerEventLogger;
@@ -69,15 +72,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             Log("Attempting to create room");
 
-            using (var db = databaseFactory.GetInstance())
-            {
-                if (await db.IsUserRestrictedAsync(Context.GetUserId()))
-                    throw new InvalidStateException("Can't create a room when restricted.");
-            }
-
-            long roomId = await sharedInterop.CreateRoomAsync(Context.GetUserId(), room);
+            long roomId = await roomFactory.CreateRoomAsync(Context.GetUserId(), room);
             await multiplayerEventLogger.LogRoomCreatedAsync(roomId, Context.GetUserId());
-
             return await joinOrCreateRoom(roomId, room.Settings.Password, true);
         }
 

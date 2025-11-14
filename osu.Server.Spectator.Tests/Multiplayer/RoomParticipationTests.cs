@@ -59,11 +59,14 @@ namespace osu.Server.Spectator.Tests.Multiplayer
         [Fact]
         public async Task UserCantJoinWhenRestricted()
         {
-            Database.Setup(db => db.IsUserRestrictedAsync(It.IsAny<int>())).ReturnsAsync(true);
+            await Hub.CreateRoom(new MultiplayerRoom(ROOM_ID));
+
+            Database.Setup(db => db.IsUserRestrictedAsync(USER_ID_2)).ReturnsAsync(true);
+            SetUserContext(ContextUser2);
 
             await Assert.ThrowsAsync<InvalidStateException>(() => Hub.JoinRoom(ROOM_ID));
 
-            using (var user = await UserStates.GetForUse(USER_ID))
+            using (var user = await UserStates.GetForUse(USER_ID_2))
                 Assert.Null(user.Item!.CurrentRoomID);
         }
 

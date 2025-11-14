@@ -20,7 +20,6 @@ using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Elo;
 using osu.Server.Spectator.Entities;
-using osu.Server.Spectator.Services;
 using StatsdClient;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
@@ -44,7 +43,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         private readonly ConcurrentDictionary<int, MatchmakingQueue> poolQueues = new ConcurrentDictionary<int, MatchmakingQueue>();
 
         private readonly IHubContext<MultiplayerHub> hub;
-        private readonly ISharedInterop sharedInterop;
+        private readonly IMultiplayerRoomFactory roomFactory;
         private readonly IDatabaseFactory databaseFactory;
         private readonly EntityStore<ServerMultiplayerRoom> rooms;
         private readonly IMultiplayerHubContext hubContext;
@@ -54,11 +53,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         private DateTimeOffset lastLobbyUpdateTime = DateTimeOffset.UnixEpoch;
         private DateTimeOffset lastQueueRefreshTime = DateTimeOffset.UnixEpoch;
 
-        public MatchmakingQueueBackgroundService(IHubContext<MultiplayerHub> hub, ISharedInterop sharedInterop, IDatabaseFactory databaseFactory, ILoggerFactory loggerFactory,
+        public MatchmakingQueueBackgroundService(IHubContext<MultiplayerHub> hub, IDatabaseFactory databaseFactory, IMultiplayerRoomFactory roomFactory, ILoggerFactory loggerFactory,
                                                  EntityStore<ServerMultiplayerRoom> rooms, IMultiplayerHubContext hubContext, IMemoryCache memoryCache)
         {
             this.hub = hub;
-            this.sharedInterop = sharedInterop;
+            this.roomFactory = roomFactory;
             this.databaseFactory = databaseFactory;
             this.rooms = rooms;
             this.hubContext = hubContext;
@@ -264,15 +263,21 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
                     DogStatsd.Timer($"{statsd_prefix}.queue.duration", (DateTimeOffset.Now - user.SearchStartTime).TotalMilliseconds, tags: [$"queue:{bundle.Queue.Pool.name}"]);
 
                 string password = Guid.NewGuid().ToString();
-                long roomId = await sharedInterop.CreateRoomAsync(AppSettings.BanchoBotUserId, new MultiplayerRoom(0)
+
+                long roomId;
+
+                using (var db = databaseFactory.GetInstance())
                 {
-                    Settings =
+                    roomId = await roomFactory.CreateRoomAsync(AppSettings.BanchoBotUserId, new MultiplayerRoom(0)
                     {
-                        MatchType = MatchType.Matchmaking,
-                        Password = password
-                    },
-                    Playlist = await queryPlaylistItems(bundle.Queue.Pool, group.Users.Select(u => u.Rating).ToArray())
-                });
+                        Settings =
+                        {
+                            MatchType = MatchType.Matchmaking,
+                            Password = password
+                        },
+                        Playlist = await queryPlaylistItems(bundle.Queue.Pool, group.Users.Select(u => u.Rating).ToArray())
+                    });
+                }
 
                 // Initialise the room and users
                 using (var roomUsage = await rooms.GetForUse(roomId, true))

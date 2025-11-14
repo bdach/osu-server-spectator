@@ -42,6 +42,7 @@ namespace osu.Server.Spectator.Tests.Multiplayer
         protected readonly Mock<IDatabaseFactory> DatabaseFactory;
         protected readonly Mock<IDatabaseAccess> Database;
 
+        protected readonly Mock<IMultiplayerRoomFactory> RoomFactory;
         protected readonly Mock<ISharedInterop> LegacyIO;
 
         /// <summary>
@@ -94,6 +95,10 @@ namespace osu.Server.Spectator.Tests.Multiplayer
             DatabaseFactory = new Mock<IDatabaseFactory>();
             Database = new Mock<IDatabaseAccess>();
             setUpMockDatabase();
+
+            RoomFactory = new Mock<IMultiplayerRoomFactory>();
+            RoomFactory.Setup(io => io.CreateRoomAsync(It.IsAny<int>(), It.IsAny<MultiplayerRoom>()))
+                       .Returns<int, MultiplayerRoom>((_, room) => Task.FromResult(room.RoomID));
 
             Rooms = new EntityStore<ServerMultiplayerRoom>();
             UserStates = new EntityStore<MultiplayerClientState>();
@@ -163,8 +168,8 @@ namespace osu.Server.Spectator.Tests.Multiplayer
 
             MatchmakingBackgroundService = new MatchmakingQueueBackgroundService(
                 hubContext.Object,
-                LegacyIO.Object,
                 DatabaseFactory.Object,
+                RoomFactory.Object,
                 loggerFactoryMock.Object,
                 Rooms,
                 HubContext,
@@ -175,6 +180,7 @@ namespace osu.Server.Spectator.Tests.Multiplayer
                 Rooms,
                 UserStates,
                 DatabaseFactory.Object,
+                RoomFactory.Object,
                 new ChatFilters(DatabaseFactory.Object),
                 HubContext,
                 LegacyIO.Object,

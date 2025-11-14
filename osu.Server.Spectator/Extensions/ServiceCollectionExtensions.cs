@@ -8,7 +8,6 @@ using osu.Server.Spectator.Hubs;
 using osu.Server.Spectator.Hubs.Metadata;
 using osu.Server.Spectator.Hubs.Multiplayer;
 using osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue;
-using osu.Server.Spectator.Hubs.Multiplayer.Standard;
 using osu.Server.Spectator.Hubs.Spectator;
 using osu.Server.Spectator.Services;
 using osu.Server.Spectator.Storage;
