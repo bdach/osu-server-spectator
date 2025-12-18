@@ -16,6 +16,7 @@ using osu.Server.Spectator.Extensions;
 using osu.Server.Spectator.Hubs;
 using osu.Server.Spectator.Hubs.Metadata;
 using osu.Server.Spectator.Hubs.Multiplayer;
+using osu.Server.Spectator.Hubs.Referee;
 using osu.Server.Spectator.Hubs.Spectator;
 
 namespace osu.Server.Spectator
@@ -30,7 +31,19 @@ namespace osu.Server.Spectator
                         // JSON hub protocol is enabled by default, but we use MessagePack.
                         // Some models are not compatible with the JSON protocol, so we should never negotiate it.
                         options.SupportedProtocols?.Remove("json");
-
+                    })
+                    .AddHubOptions<SpectatorHub>(options =>
+                    {
+                        options.AddFilter<LoggingHubFilter>();
+                        options.AddFilter<ConcurrentConnectionLimiter>();
+                    })
+                    .AddHubOptions<MultiplayerHub>(options =>
+                    {
+                        options.AddFilter<LoggingHubFilter>();
+                        options.AddFilter<ConcurrentConnectionLimiter>();
+                    })
+                    .AddHubOptions<MetadataHub>(options =>
+                    {
                         options.AddFilter<LoggingHubFilter>();
                         options.AddFilter<ConcurrentConnectionLimiter>();
                     })
@@ -50,11 +63,12 @@ namespace osu.Server.Spectator
                     .AddMemoryCache();
 
             services.AddDistributedMemoryCache(); // replace with redis
+            services.AddCors();
 
             services.AddLogging(logging =>
             {
-                // logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
-                // logging.AddFilter("Microsoft.AspNetCore.Http.Connections", LogLevel.Debug);
+                logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
+                logging.AddFilter("Microsoft.AspNetCore.Http.Connections", LogLevel.Debug);
 
                 logging.ClearProviders();
                 logging.AddConsole();
@@ -100,12 +114,21 @@ namespace osu.Server.Spectator
             app.UseAuthorization();
 
             app.UseWebSockets();
+            app.UseCors();
 
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapHub<SpectatorHub>("/spectator");
                 endpoints.MapHub<MultiplayerHub>("/multiplayer");
                 endpoints.MapHub<MetadataHub>("/metadata");
+                endpoints.MapHub<RefereeHub>("/referee").RequireCors(policy =>
+                {
+                    // TODO: THIS IS PROBABLY VERY UNSAFE
+                    policy.SetIsOriginAllowed(_ => true)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
+                });
             });
 
             // Create shutdown manager singleton.
