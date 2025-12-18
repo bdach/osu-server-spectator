@@ -7,20 +7,24 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
+using osu.Server.Spectator.Hubs.Referee;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer
 {
     public class MultiplayerEventLogger
     {
         private readonly IDatabaseFactory databaseFactory;
+        private readonly RefereeHubContext refereeHubContext;
         private readonly ILogger<MultiplayerEventLogger> logger;
 
         public MultiplayerEventLogger(
             ILoggerFactory loggerFactory,
-            IDatabaseFactory databaseFactory)
+            IDatabaseFactory databaseFactory,
+            RefereeHubContext refereeHubContext)
         {
             logger = loggerFactory.CreateLogger<MultiplayerEventLogger>();
             this.databaseFactory = databaseFactory;
+            this.refereeHubContext = refereeHubContext;
         }
 
         public Task LogRoomCreatedAsync(long roomId, int userId) => logEvent(new multiplayer_realtime_room_event
@@ -132,8 +136,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             try
             {
-                using var db = databaseFactory.GetInstance();
-                await db.LogRoomEventAsync(ev);
+                using (var db = databaseFactory.GetInstance())
+                {
+                    await db.LogRoomEventAsync(ev);
+                }
+
+                await refereeHubContext.NotifyRoomEvent(ev);
             }
             catch (Exception e)
             {

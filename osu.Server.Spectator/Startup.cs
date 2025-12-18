@@ -26,27 +26,19 @@ namespace osu.Server.Spectator
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddSignalR(options =>
-                    {
-                        // JSON hub protocol is enabled by default, but we use MessagePack.
-                        // Some models are not compatible with the JSON protocol, so we should never negotiate it.
-                        options.SupportedProtocols?.Remove("json");
-                    })
-                    .AddHubOptions<SpectatorHub>(options =>
-                    {
-                        options.AddFilter<LoggingHubFilter>();
-                        options.AddFilter<ConcurrentConnectionLimiter>();
-                    })
-                    .AddHubOptions<MultiplayerHub>(options =>
-                    {
-                        options.AddFilter<LoggingHubFilter>();
-                        options.AddFilter<ConcurrentConnectionLimiter>();
-                    })
-                    .AddHubOptions<MetadataHub>(options =>
-                    {
-                        options.AddFilter<LoggingHubFilter>();
-                        options.AddFilter<ConcurrentConnectionLimiter>();
-                    })
+            Action<HubOptions> configureClientHubOptions = options =>
+            {
+                options.AddFilter<LoggingHubFilter>();
+                options.AddFilter<ConcurrentConnectionLimiter>();
+                // JSON hub protocol is enabled by default, but we use MessagePack.
+                // Some models are not compatible with the JSON protocol, so we should never negotiate it.
+                options.SupportedProtocols?.Remove("json");
+            };
+
+            services.AddSignalR()
+                    .AddHubOptions<SpectatorHub>(configureClientHubOptions)
+                    .AddHubOptions<MultiplayerHub>(configureClientHubOptions)
+                    .AddHubOptions<MetadataHub>(configureClientHubOptions)
                     .AddMessagePackProtocol(options =>
                     {
                         // This is required for match type states/events, which are regularly sent as derived implementations where that type is not conveyed in the invocation signature itself.
@@ -56,7 +48,8 @@ namespace osu.Server.Spectator
                         // https://github.com/dotnet/aspnetcore/issues/30096 ("it's definitely broken")
                         // https://github.com/dotnet/aspnetcore/issues/7298 (current tracking issue, though weirdly described as a javascript client issue)
                         options.SerializerOptions = SignalRUnionWorkaroundResolver.OPTIONS;
-                    });
+                    })
+                    .AddHubOptions<RefereeHub>(options => options.SupportedProtocols?.Remove("messagepack"));
 
             services.AddHubEntities()
                     .AddDatabaseServices()
