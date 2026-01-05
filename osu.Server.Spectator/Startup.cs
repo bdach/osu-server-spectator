@@ -78,8 +78,6 @@ namespace osu.Server.Spectator
             services.Configure<HostOptions>(opts => opts.ShutdownTimeout = GracefulShutdownManager.TIME_BEFORE_FORCEFUL_SHUTDOWN.Add(TimeSpan.FromMinutes(1)));
 
             ConfigureAuthentication(services);
-
-            services.AddAuthorization();
         }
 
         protected virtual void ConfigureAuthentication(IServiceCollection services)
@@ -90,7 +88,15 @@ namespace osu.Server.Spectator
                         config.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                         config.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
                     })
-                    .AddJwtBearer(); // options will be injected through DI, via the singleton registration above.
+                    // options will be injected through DI, via the singleton registration above.
+                    .AddJwtBearer(ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME)
+                    .AddJwtBearer(ConfigureJwtBearerOptions.REFEREE_DELEGATION_SCHEME);
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy(ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME, policy => policy.RequireAuthenticatedUser());
+                options.AddPolicy(ConfigureJwtBearerOptions.REFEREE_DELEGATION_SCHEME, policy => policy.RequireAssertion(c => true));
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

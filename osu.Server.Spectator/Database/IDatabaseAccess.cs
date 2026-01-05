@@ -18,6 +18,8 @@ namespace osu.Server.Spectator.Database
         /// Will be <c>null</c> if the token does not exist, has expired or has been revoked.
         /// </summary>
         Task<int?> GetUserIdFromTokenAsync(JsonWebToken jwtToken);
+        
+        Task<int?> GetResourceOwnerIdFromDelegationTokenAsync(JsonWebToken jwtToken);
 
         /// <summary>
         /// Whether the user with the given <paramref name="userId"/> is currently restricted.
