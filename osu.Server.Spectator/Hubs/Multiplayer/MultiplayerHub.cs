@@ -25,7 +25,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
     {
         public const string STATSD_PREFIX = "multiplayer";
 
-        private static readonly MessagePackSerializerOptions message_pack_options = new MessagePackSerializerOptions(new SignalRUnionWorkaroundResolver());
+        public static readonly MessagePackSerializerOptions MESSAGE_PACK_OPTIONS = new MessagePackSerializerOptions(new SignalRUnionWorkaroundResolver());
 
         protected readonly EntityStore<ServerMultiplayerRoom> Rooms;
         protected readonly IMultiplayerHubContext HubContext;
@@ -61,217 +61,25 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             await base.OnConnectedAsync();
 
+            // TODO: this needs to happen *somehow* when going through the referee hub, too
             using (var usage = await GetOrCreateLocalUserState())
                 usage.Item = new MultiplayerClientState(Context.ConnectionId, Context.GetUserId());
         }
 
         public async Task<MultiplayerRoom> CreateRoom(MultiplayerRoom room)
-        {
-            Log("Attempting to create room");
+            => await HubContext.CreateRoom(Context, room);
 
-            using (var db = databaseFactory.GetInstance())
-            {
-                if (await db.IsUserRestrictedAsync(Context.GetUserId()))
-                    throw new InvalidStateException("Can't join a room when restricted.");
-            }
-
-            long roomId = await sharedInterop.CreateRoomAsync(Context.GetUserId(), room);
-            await multiplayerEventLogger.LogRoomCreatedAsync(roomId, Context.GetUserId());
-
-            return await joinOrCreateRoom(roomId, room.Settings.Password, true);
-        }
-
-        public Task<MultiplayerRoom> JoinRoom(long roomId) => JoinRoomWithPassword(roomId, string.Empty);
+        public async Task<MultiplayerRoom> JoinRoom(long roomId)
+            => await HubContext.JoinRoomWithPassword(Context, roomId, string.Empty);
 
         public async Task<MultiplayerRoom> JoinRoomWithPassword(long roomId, string password)
-        {
-            Log($"Attempting to join room {roomId}");
-
-            using (var db = databaseFactory.GetInstance())
-            {
-                if (await db.IsUserRestrictedAsync(Context.GetUserId()))
-                    throw new InvalidStateException("Can't join a room when restricted.");
-            }
-
-            return await joinOrCreateRoom(roomId, password, false);
-        }
-
-        private async Task<MultiplayerRoom> joinOrCreateRoom(long roomId, string password, bool isNewRoom)
-        {
-            byte[] roomBytes;
-
-            using (var userUsage = await GetOrCreateLocalUserState())
-            {
-                Debug.Assert(userUsage.Item != null);
-
-                if (userUsage.Item.CurrentRoomID != null)
-                    throw new InvalidStateException("Can't join a room when already in another room.");
-
-                var roomUser = new MultiplayerRoomUser(Context.GetUserId());
-
-                try
-                {
-                    using (var roomUsage = await Rooms.GetForUse(roomId, isNewRoom))
-                    {
-                        ServerMultiplayerRoom? room = null;
-
-                        try
-                        {
-                            room = roomUsage.Item ??= await ServerMultiplayerRoom.InitialiseAsync(roomId, HubContext, databaseFactory, multiplayerEventLogger);
-
-                            // this is a sanity check to keep *rooms* in a good state.
-                            // in theory the connection clean-up code should handle this correctly.
-                            if (room.Users.Any(u => u.UserID == roomUser.UserID))
-                                throw new InvalidOperationException($"User {roomUser.UserID} attempted to join room {room.RoomID} they are already present in.");
-
-                            if (!await room.Controller.UserCanJoin(roomUser.UserID))
-                                throw new InvalidStateException("Not eligible to join this room.");
-
-                            if (!string.IsNullOrEmpty(room.Settings.Password))
-                            {
-                                if (room.Settings.Password != password)
-                                    throw new InvalidPasswordException();
-                            }
-
-                            if (isNewRoom && room.Settings.MatchType != MatchType.Matchmaking)
-                                room.Host = roomUser;
-
-                            userUsage.Item.SetRoom(roomId);
-
-                            // because match controllers may send subsequent information via Users collection hooks,
-                            // inform clients before adding user to the room.
-                            await Clients.Group(GetGroupId(roomId)).UserJoined(roomUser);
-
-                            await room.AddUser(roomUser);
-                            room.UpdateForRetrieval();
-
-                            await addDatabaseUser(room, roomUser);
-                            await Groups.AddToGroupAsync(Context.ConnectionId, GetGroupId(roomId));
-
-                            Log(room, "User joined");
-                        }
-                        catch
-                        {
-                            try
-                            {
-                                if (userUsage.Item.CurrentRoomID != null)
-                                {
-                                    // the user was joined to the room, so we can run the standard leaveRoom method.
-                                    // this will handle closing the room if this was the only user.
-                                    await leaveRoom(userUsage.Item, roomUsage, false);
-                                }
-                                else if (isNewRoom)
-                                {
-                                    if (room != null)
-                                    {
-                                        // the room was retrieved and associated to the usage, but something failed before the user (host) could join.
-                                        // for now, let's mark the room as ended if this happens.
-                                        await endDatabaseMatch(room);
-                                    }
-
-                                    roomUsage.Destroy();
-                                }
-                            }
-                            finally
-                            {
-                                // no matter how we end up cleaning up the room, ensure the user's state is cleared.
-                                userUsage.Item.ClearRoom();
-                            }
-
-                            throw;
-                        }
-
-                        roomBytes = MessagePackSerializer.Serialize<MultiplayerRoom>(room, message_pack_options);
-                    }
-                }
-                catch (KeyNotFoundException)
-                {
-                    Log("Dropping attempt to join room before the host.", LogLevel.Error);
-                    throw new InvalidStateException("Failed to join the room, please try again.");
-                }
-            }
-
-            try
-            {
-                // Run in background so we don't hold locks on user/room states.
-                _ = sharedInterop.AddUserToRoomAsync(Context.GetUserId(), roomId, password);
-            }
-            catch
-            {
-                // Errors are logged internally by SharedInterop.
-            }
-
-            await multiplayerEventLogger.LogPlayerJoinedAsync(roomId, Context.GetUserId());
-
-            return MessagePackSerializer.Deserialize<MultiplayerRoom>(roomBytes, message_pack_options);
-        }
+            => await HubContext.JoinRoomWithPassword(Context, roomId, password);
 
         public async Task LeaveRoom()
-        {
-            Log("Requesting to leave room");
-            long roomId;
-
-            using (var userUsage = await GetOrCreateLocalUserState())
-            {
-                Debug.Assert(userUsage.Item != null);
-
-                if (userUsage.Item.CurrentRoomID == null)
-                    return;
-
-                roomId = userUsage.Item.CurrentRoomID.Value;
-                await leaveRoom(userUsage.Item, false);
-            }
-
-            await multiplayerEventLogger.LogPlayerLeftAsync(roomId, Context.GetUserId());
-        }
+            => await HubContext.LeaveRoom(Context);
 
         public async Task InvitePlayer(int userId)
-        {
-            using (var db = databaseFactory.GetInstance())
-            {
-                bool isRestricted = await db.IsUserRestrictedAsync(userId);
-                if (isRestricted)
-                    throw new InvalidStateException("Can't invite a restricted user to a room.");
-
-                var relation = await db.GetUserRelation(Context.GetUserId(), userId);
-
-                // The local user has the player they are trying to invite blocked.
-                if (relation?.foe == true)
-                    throw new UserBlockedException();
-
-                var inverseRelation = await db.GetUserRelation(userId, Context.GetUserId());
-
-                // The player being invited has the local user blocked.
-                if (inverseRelation?.foe == true)
-                    throw new UserBlockedException();
-
-                // The player being invited disallows unsolicited PMs and the local user is not their friend.
-                if (inverseRelation?.friend != true && !await db.GetUserAllowsPMs(userId))
-                    throw new UserBlocksPMsException();
-            }
-
-            using (var userUsage = await GetOrCreateLocalUserState())
-            {
-                Debug.Assert(userUsage.Item != null);
-
-                using (var roomUsage = await getLocalUserRoom(userUsage.Item))
-                {
-                    var user = userUsage.Item;
-                    var room = roomUsage.Item;
-
-                    if (user == null)
-                        throw new InvalidStateException("Local user was not found in the expected room");
-
-                    if (room == null)
-                        throw new InvalidOperationException("Attempted to operate on a null room");
-
-                    if (room.Settings.MatchType == MatchType.Matchmaking)
-                        throw new InvalidStateException("Can't invite players to matchmaking rooms.");
-
-                    await Clients.User(userId.ToString()).Invited(user.UserId, room.RoomID, room.Settings.Password);
-                }
-            }
-        }
+            => await HubContext.InvitePlayer(Context, userId);
 
         public async Task TransferHost(int userId)
         {
@@ -306,47 +114,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         }
 
         public async Task KickUser(int userId)
-        {
-            long roomId;
-
-            using (var userUsage = await GetOrCreateLocalUserState())
-            {
-                Debug.Assert(userUsage.Item != null);
-
-                using (var roomUsage = await getLocalUserRoom(userUsage.Item))
-                {
-                    var room = roomUsage.Item;
-
-                    if (room == null)
-                        throw new InvalidOperationException("Attempted to operate on a null room");
-
-                    Log(room, $"Kicking user {userId}");
-                    roomId = room.RoomID;
-
-                    if (userId == userUsage.Item?.UserId)
-                        throw new InvalidStateException("Can't kick self");
-
-                    ensureIsHost(room);
-
-                    var kickTarget = room.Users.FirstOrDefault(u => u.UserID == userId);
-
-                    if (kickTarget == null)
-                        throw new InvalidOperationException("Target user is not in the current room");
-
-                    using (var targetUserUsage = await GetStateFromUser(kickTarget.UserID))
-                    {
-                        Debug.Assert(targetUserUsage.Item != null);
-
-                        if (targetUserUsage.Item.CurrentRoomID == null)
-                            throw new InvalidOperationException();
-
-                        await leaveRoom(targetUserUsage.Item, roomUsage, true);
-                    }
-                }
-            }
-
-            await multiplayerEventLogger.LogPlayerKickedAsync(roomId, userId);
-        }
+            => await HubContext.KickUser(Context, userId);
 
         public async Task ChangeState(MultiplayerUserState newState)
         {
@@ -797,12 +565,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 await db.EndMatchAsync(room);
 
             await multiplayerEventLogger.LogRoomDisbandedAsync(room.RoomID, Context.GetUserId());
-        }
-
-        private async Task addDatabaseUser(MultiplayerRoom room, MultiplayerRoomUser user)
-        {
-            using (var db = databaseFactory.GetInstance())
-                await db.AddRoomParticipantAsync(room, user);
         }
 
         private async Task removeDatabaseUser(MultiplayerRoom room, MultiplayerRoomUser user)

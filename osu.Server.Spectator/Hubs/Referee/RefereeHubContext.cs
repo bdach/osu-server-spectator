@@ -4,6 +4,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using osu.Server.Spectator.Database.Models;
+using osu.Server.Spectator.Hubs.Multiplayer;
 
 namespace osu.Server.Spectator.Hubs.Referee
 {
@@ -18,7 +19,7 @@ namespace osu.Server.Spectator.Hubs.Referee
 
         public async Task NotifyRoomEvent(multiplayer_realtime_room_event ev)
         {
-            await context.Clients.Group(RefereeHub.GetGroupId(ev.room_id)).SendAsync("RoomEventLogged", ev);
+            await context.Clients.Group(MultiplayerHub.GetGroupId(ev.room_id)).SendAsync("RoomEventLogged", ev);
         }
     }
 }

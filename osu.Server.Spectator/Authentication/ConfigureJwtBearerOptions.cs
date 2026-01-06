@@ -152,6 +152,13 @@ namespace osu.Server.Spectator.Authentication
 
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    if (!string.IsNullOrEmpty(accessToken))
+                        context.Token = accessToken;
+                    return Task.CompletedTask;
+                },
                 OnTokenValidated = async context =>
                 {
                     var jwtToken = (JsonWebToken)context.SecurityToken;

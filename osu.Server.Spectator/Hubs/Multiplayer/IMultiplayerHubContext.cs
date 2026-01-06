@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
@@ -81,6 +82,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// </summary>
         /// <param name="roomId">The ID of the room to retrieve.</param>
         Task<ItemUsage<ServerMultiplayerRoom>?> TryGetRoom(long roomId);
+
+        Task<MultiplayerRoom> CreateRoom(HubCallerContext caller, MultiplayerRoom room);
+        Task<MultiplayerRoom> JoinRoomWithPassword(HubCallerContext caller, long roomId, string password);
+        Task LeaveRoom(HubCallerContext caller);
+        Task<long> CloseRoom(HubCallerContext caller);
+        Task InvitePlayer(HubCallerContext caller, int userId);
+        Task KickUser(HubCallerContext caller, int userId);
 
         /// <summary>
         /// Unreadies all users in a room.
