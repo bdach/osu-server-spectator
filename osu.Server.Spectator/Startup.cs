@@ -5,6 +5,7 @@ using System;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -90,13 +91,13 @@ namespace osu.Server.Spectator
                     })
                     // options will be injected through DI, via the singleton registration above.
                     .AddJwtBearer(ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME)
-                    .AddJwtBearer(ConfigureJwtBearerOptions.REFEREE_DELEGATION_SCHEME);
-
-            services.AddAuthorization(options =>
-            {
-                options.AddPolicy(ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME, policy => policy.RequireAuthenticatedUser());
-                options.AddPolicy(ConfigureJwtBearerOptions.REFEREE_DELEGATION_SCHEME, policy => policy.RequireAssertion(c => true));
-            });
+                    .AddJwtBearer(ConfigureJwtBearerOptions.REFEREE_AUTH_CODE_SCHEME)
+                    .AddPolicyScheme(JwtBearerDefaults.AuthenticationScheme, displayName: null, options =>
+                    {
+                        options.ForwardDefaultSelector = ctx => ctx.GetEndpoint()?.Metadata.GetMetadata<HubMetadata>()?.HubType == typeof(RefereeHub)
+                            ? ConfigureJwtBearerOptions.REFEREE_AUTH_CODE_SCHEME
+                            : ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME;
+                    });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -109,11 +110,11 @@ namespace osu.Server.Spectator
 
             app.UseRouting();
 
+            app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseWebSockets();
-            app.UseCors();
 
             app.UseEndpoints(endpoints =>
             {

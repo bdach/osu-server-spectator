@@ -3,10 +3,8 @@
 
 using System;
 using System.IO;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
@@ -50,7 +48,8 @@ namespace osu.Server.Spectator.Authentication
                     return;
 
                 case REFEREE_AUTH_CODE_SCHEME:
-                    throw new NotImplementedException();
+                    configureRefereeAuthenticationCodeScheme(options);
+                    return;
 
                 default:
                     throw new NotSupportedException($"Scheme {name} is not supported");
@@ -128,6 +127,43 @@ namespace osu.Server.Spectator.Authentication
                             // because of this the token is rejected by the authorization middleware *before* we ever arrive here.
                             // to fix this we either have to bolt on the user ID in `OnMessageReceived`,
                             // or get web to put a claim in the token that will indicate that the token gives permission to act on behalf of the resource owner.
+                            logger.LogInformation("Token revoked or expired");
+                            context.Fail("Token has expired or been revoked");
+                        }
+                    }
+                },
+            };
+        }
+
+        private void configureRefereeAuthenticationCodeScheme(JwtBearerOptions options)
+        {
+            var rsa = getKeyProvider();
+
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                IssuerSigningKey = new RsaSecurityKey(rsa),
+                // there could be multiple valid audiences here, so we're not checking.
+                // TODO: maybe rethink that later.
+                ValidateAudience = false,
+                // TODO: figure out why this isn't included in the token.
+                ValidateIssuer = false,
+                ValidIssuer = "https://osu.ppy.sh/",
+            };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = async context =>
+                {
+                    var jwtToken = (JsonWebToken)context.SecurityToken;
+                    int tokenUserId = int.Parse(jwtToken.Subject);
+
+                    using (var db = databaseFactory.GetInstance())
+                    {
+                        // check expiry/revocation against database
+                        var userId = await db.GetUserIdFromTokenAsync(jwtToken);
+
+                        if (userId != tokenUserId)
+                        {
                             logger.LogInformation("Token revoked or expired");
                             context.Fail("Token has expired or been revoked");
                         }
