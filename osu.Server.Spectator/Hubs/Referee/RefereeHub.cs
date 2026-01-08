@@ -25,7 +25,13 @@ namespace osu.Server.Spectator.Hubs.Referee
             await Clients.Caller.SendAsync("Pong", payload);
         }
 
-        public async Task<long> MakeRoom(string roomName)
+        public override async Task OnConnectedAsync()
+        {
+            await base.OnConnectedAsync();
+            await multiplayerHubContext.InitialiseUserState(Context);
+        }
+
+        public async Task<long> MakeRoom(int rulesetId, int beatmapId, string roomName)
         {
             var room = new MultiplayerRoom(new Room
             {
@@ -35,7 +41,7 @@ namespace osu.Server.Spectator.Hubs.Referee
                 QueueMode = QueueMode.HostOnly,
                 Playlist =
                 [
-                    new PlaylistItem(new APIBeatmap { OnlineID = 75 })
+                    new PlaylistItem(new APIBeatmap { OnlineID = beatmapId }).With(ruleset: rulesetId)
                 ]
             });
             var created = await multiplayerHubContext.CreateRoom(Context, room);
@@ -57,5 +63,11 @@ namespace osu.Server.Spectator.Hubs.Referee
 
         public async Task KickUser(int userId)
             => await multiplayerHubContext.KickUser(Context, userId);
+
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            await multiplayerHubContext.CleanUpUserState(Context);
+            await base.OnDisconnectedAsync(exception);
+        }
     }
 }

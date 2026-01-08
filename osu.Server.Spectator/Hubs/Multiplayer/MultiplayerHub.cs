@@ -60,10 +60,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public override async Task OnConnectedAsync()
         {
             await base.OnConnectedAsync();
-
-            // TODO: this needs to happen *somehow* when going through the referee hub, too
-            using (var usage = await GetOrCreateLocalUserState())
-                usage.Item = new MultiplayerClientState(Context.ConnectionId, Context.GetUserId());
+            await HubContext.InitialiseUserState(Context);
         }
 
         public async Task<MultiplayerRoom> CreateRoom(MultiplayerRoom room)

@@ -83,6 +83,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="roomId">The ID of the room to retrieve.</param>
         Task<ItemUsage<ServerMultiplayerRoom>?> TryGetRoom(long roomId);
 
+        Task InitialiseUserState(HubCallerContext caller);
+        Task CleanUpUserState(HubCallerContext caller);
         Task<MultiplayerRoom> CreateRoom(HubCallerContext caller, MultiplayerRoom room);
         Task<MultiplayerRoom> JoinRoomWithPassword(HubCallerContext caller, long roomId, string password);
         Task LeaveRoom(HubCallerContext caller);

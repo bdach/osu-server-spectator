@@ -18,6 +18,7 @@ using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
 using osu.Server.Spectator.Hubs.Multiplayer;
 using osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue;
+using osu.Server.Spectator.Hubs.Referee;
 using osu.Server.Spectator.Services;
 
 namespace osu.Server.Spectator.Tests.Multiplayer
@@ -151,7 +152,7 @@ namespace osu.Server.Spectator.Tests.Multiplayer
             LegacyIO.Setup(io => io.CreateRoomAsync(It.IsAny<int>(), It.IsAny<MultiplayerRoom>()))
                     .Returns<int, MultiplayerRoom>((_, room) => Task.FromResult(room.RoomID));
 
-            EventLogger = new MultiplayerEventLogger(loggerFactoryMock.Object, DatabaseFactory.Object);
+            EventLogger = new MultiplayerEventLogger(loggerFactoryMock.Object, DatabaseFactory.Object, new Mock<RefereeHubContext>().Object);
 
             HubContext = new MultiplayerHubContext(
                 hubContext.Object,
@@ -159,7 +160,8 @@ namespace osu.Server.Spectator.Tests.Multiplayer
                 UserStates,
                 loggerFactoryMock.Object,
                 DatabaseFactory.Object,
-                EventLogger);
+                EventLogger,
+                LegacyIO.Object);
 
             MatchmakingBackgroundService = new MatchmakingQueueBackgroundService(
                 hubContext.Object,

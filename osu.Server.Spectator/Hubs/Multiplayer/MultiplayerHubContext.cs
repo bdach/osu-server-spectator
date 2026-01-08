@@ -111,6 +111,18 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             return rooms.TryGetForUse(roomId);
         }
 
+        public async Task InitialiseUserState(HubCallerContext caller)
+        {
+            using (var usage = await GetOrCreateUserState(caller))
+                usage.Item = new MultiplayerClientState(caller.ConnectionId, caller.GetUserId());
+        }
+
+        public async Task CleanUpUserState(HubCallerContext caller)
+        {
+            using (var usage = await GetOrCreateUserState(caller))
+                usage.Item = null;
+        }
+
         public async Task<MultiplayerRoom> CreateRoom(HubCallerContext caller, MultiplayerRoom room)
         {
             Log(caller, "Attempting to create room");
@@ -459,7 +471,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                     ensureIsHost(caller, room);
 
-                    foreach (var user in room.Users.OrderBy(u => u.UserID != room.Host?.UserID).ToArray())
+                    foreach (var user in room.Users.Where(u => u.UserID != room.Host?.UserID).ToArray())
                     {
                         using (var targetUserUsage = await users.GetForUse(user.UserID))
                         {
@@ -471,10 +483,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                             await leaveRoom(caller, targetUserUsage.Item, roomUsage, true);
                         }
                     }
+
+                    await leaveRoom(caller, userUsage.Item, roomUsage, true);
                 }
             }
 
-            await multiplayerEventLogger.LogRoomDisbandedAsync(roomId, caller.GetUserId());
             return roomId;
         }
 
