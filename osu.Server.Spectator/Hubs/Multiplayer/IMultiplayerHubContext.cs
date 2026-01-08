@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
+using osu.Game.Online.Multiplayer.Countdown;
 using osu.Game.Online.Rooms;
 using osu.Server.Spectator.Entities;
 
@@ -88,9 +89,23 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         Task<MultiplayerRoom> CreateRoom(HubCallerContext caller, MultiplayerRoom room);
         Task<MultiplayerRoom> JoinRoomWithPassword(HubCallerContext caller, long roomId, string password);
         Task LeaveRoom(HubCallerContext caller);
+        Task LeaveRoom(HubCallerContext caller, MultiplayerClientState state, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick);
         Task<long> CloseRoom(HubCallerContext caller);
         Task InvitePlayer(HubCallerContext caller, int userId);
+        Task TransferHost(HubCallerContext caller, int userId);
         Task KickUser(HubCallerContext caller, int userId);
+        Task StartMatchCountdown(HubCallerContext caller, StartMatchCountdownRequest request);
+        Task StartMatchCountdown(HubCallerContext caller, ServerMultiplayerRoom room, StartMatchCountdownRequest request);
+        Task StopMatchCountdown(HubCallerContext caller);
+        Task StopCountdown(HubCallerContext caller, ServerMultiplayerRoom room, StopCountdownRequest request);
+        Task StartMatch(HubCallerContext caller);
+        Task AbortMatch(HubCallerContext caller);
+        Task AddPlaylistItem(HubCallerContext caller, MultiplayerPlaylistItem item);
+        Task EditPlaylistItem(HubCallerContext caller, MultiplayerPlaylistItem item);
+        Task EditCurrentPlaylistItem(HubCallerContext caller, Action<MultiplayerPlaylistItem> changeFunc);
+        Task RemovePlaylistItem(HubCallerContext caller, long playlistItemId);
+        Task ChangeSettings(HubCallerContext caller, MultiplayerRoomSettings settings);
+        Task ChangeSettings(HubCallerContext caller, Action<MultiplayerRoomSettings> changeFunc);
 
         /// <summary>
         /// Unreadies all users in a room.
@@ -121,6 +136,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <exception cref="InvalidStateException">If the new selection is not valid for current playlist item.</exception>
         Task ChangeUserMods(IEnumerable<APIMod> newMods, ServerMultiplayerRoom room, MultiplayerRoomUser user);
 
+        Task ChangeAndBroadcastUserState(HubCallerContext caller, MultiplayerUserState state);
+        
         /// <summary>
         /// Changes a user's state in a room.
         /// </summary>
@@ -129,6 +146,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="state">The new state.</param>
         Task ChangeAndBroadcastUserState(ServerMultiplayerRoom room, MultiplayerRoomUser user, MultiplayerUserState state);
 
+        Task ChangeAndBroadcastUserBeatmapAvailability(HubCallerContext caller, BeatmapAvailability beatmapAvailability);
+        
         /// <summary>
         /// Changes a user's beatmap availability for the current playlist item.
         /// </summary>

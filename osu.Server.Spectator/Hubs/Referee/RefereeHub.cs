@@ -4,20 +4,25 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
+using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Multiplayer;
+using osu.Game.Online.Multiplayer.Countdown;
 using osu.Game.Online.Rooms;
+using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Hubs.Multiplayer;
 
 namespace osu.Server.Spectator.Hubs.Referee
 {
     public class RefereeHub : Hub
     {
+        private readonly IDatabaseFactory db;
         private readonly IMultiplayerHubContext multiplayerHubContext;
 
-        public RefereeHub(IMultiplayerHubContext multiplayerHubContext)
+        public RefereeHub(IMultiplayerHubContext multiplayerHubContext, IDatabaseFactory db)
         {
             this.multiplayerHubContext = multiplayerHubContext;
+            this.db = db;
         }
 
         public async Task Ping(string payload)
@@ -46,7 +51,14 @@ namespace osu.Server.Spectator.Hubs.Referee
             });
             var created = await multiplayerHubContext.CreateRoom(Context, room);
             await Groups.AddToGroupAsync(Context.ConnectionId, MultiplayerHub.GetGroupId(created.RoomID));
+            await ensureSpectating();
             return created.RoomID;
+        }
+
+        private async Task ensureSpectating()
+        {
+            await multiplayerHubContext.ChangeAndBroadcastUserState(Context, MultiplayerUserState.Spectating);
+            await multiplayerHubContext.ChangeAndBroadcastUserBeatmapAvailability(Context, BeatmapAvailability.NotDownloaded());
         }
 
         // TODO: currently this is all still beholden to the "user can only be in one room at a time" principle
@@ -58,11 +70,68 @@ namespace osu.Server.Spectator.Hubs.Referee
             return roomId;
         }
 
+        public async Task SetRoomName(string roomName)
+            => await multiplayerHubContext.ChangeSettings(Context, room => room.Name = roomName);
+
+        public async Task SetRoomPassword(string password)
+            => await multiplayerHubContext.ChangeSettings(Context, room => room.Password = password);
+
+        public async Task SetMatchType(MatchType matchType)
+            => await multiplayerHubContext.ChangeSettings(Context, room => room.MatchType = matchType);
+
         public async Task InvitePlayer(int userId)
             => await multiplayerHubContext.InvitePlayer(Context, userId);
 
+        public async Task SetHost(int userId)
+            => await multiplayerHubContext.TransferHost(Context, userId);
+
         public async Task KickUser(int userId)
             => await multiplayerHubContext.KickUser(Context, userId);
+
+        public async Task SetBeatmap(int beatmapId, int? rulesetId)
+        {
+            using var connection = db.GetInstance();
+            var databaseBeatmap = await connection.GetBeatmapAsync(beatmapId);
+
+            if (databaseBeatmap == null)
+                throw new HubException($"Beatmap with id {beatmapId} not found.");
+
+            await multiplayerHubContext.EditCurrentPlaylistItem(Context, item =>
+            {
+                item.BeatmapID = beatmapId;
+                // TODO: this is a bit stupid...
+                item.BeatmapChecksum = databaseBeatmap.checksum ?? string.Empty;
+                item.RulesetID = rulesetId ?? item.RulesetID;
+            });
+        }
+
+        // TODO: mod settings don't work as they should here, likely due to serialisation foibles.
+        // maybe we want to be accepting string blobs here and only deserialising on c# side....
+        public async Task SetRequiredMods(APIMod[] mods)
+            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, item => item.RequiredMods = mods);
+
+        public async Task SetAllowedMods(APIMod[] mods)
+            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, item => item.AllowedMods = mods);
+
+        public async Task SetFreestyle(bool enabled)
+            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, item => item.Freestyle = enabled);
+
+        public async Task StartGameplay(int? countdown)
+        {
+            if (countdown == null)
+                await multiplayerHubContext.StartMatch(Context);
+            else
+                await multiplayerHubContext.StartMatchCountdown(Context, new StartMatchCountdownRequest { Duration = TimeSpan.FromSeconds(countdown.Value) });
+        }
+
+        public async Task AbortGameplayCountdown()
+            => await multiplayerHubContext.StopMatchCountdown(Context);
+
+        public async Task AbortGameplay()
+        {
+            await multiplayerHubContext.AbortMatch(Context);
+            await ensureSpectating(); // TODO: aborting match sets all users to idle, *including* spectating users. unsure about that one
+        }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
