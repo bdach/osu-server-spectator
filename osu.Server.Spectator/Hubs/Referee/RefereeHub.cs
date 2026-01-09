@@ -17,9 +17,9 @@ namespace osu.Server.Spectator.Hubs.Referee
     public class RefereeHub : Hub
     {
         private readonly IDatabaseFactory db;
-        private readonly IMultiplayerHubContext multiplayerHubContext;
+        private readonly IMultiplayerRefereeHubContext multiplayerHubContext;
 
-        public RefereeHub(IMultiplayerHubContext multiplayerHubContext, IDatabaseFactory db)
+        public RefereeHub(IMultiplayerRefereeHubContext multiplayerHubContext, IDatabaseFactory db)
         {
             this.multiplayerHubContext = multiplayerHubContext;
             this.db = db;
@@ -51,14 +51,7 @@ namespace osu.Server.Spectator.Hubs.Referee
             });
             var created = await multiplayerHubContext.CreateRoom(Context, room);
             await Groups.AddToGroupAsync(Context.ConnectionId, MultiplayerHub.GetGroupId(created.RoomID));
-            await ensureSpectating();
             return created.RoomID;
-        }
-
-        private async Task ensureSpectating()
-        {
-            await multiplayerHubContext.ChangeAndBroadcastUserState(Context, MultiplayerUserState.Spectating);
-            await multiplayerHubContext.ChangeAndBroadcastUserBeatmapAvailability(Context, BeatmapAvailability.NotDownloaded());
         }
 
         // TODO: currently this is all still beholden to the "user can only be in one room at a time" principle
@@ -128,10 +121,7 @@ namespace osu.Server.Spectator.Hubs.Referee
             => await multiplayerHubContext.StopMatchCountdown(Context);
 
         public async Task AbortGameplay()
-        {
-            await multiplayerHubContext.AbortMatch(Context);
-            await ensureSpectating(); // TODO: aborting match sets all users to idle, *including* spectating users. unsure about that one
-        }
+            => await multiplayerHubContext.AbortMatch(Context);
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {

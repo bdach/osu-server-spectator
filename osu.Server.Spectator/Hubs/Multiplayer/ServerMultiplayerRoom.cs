@@ -26,12 +26,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             private set => matchController = value;
         }
 
-        private readonly IMultiplayerHubContext hub;
+        private readonly IServerMultiplayerRoomController hub;
         private readonly IDatabaseFactory dbFactory;
         private readonly MultiplayerEventLogger eventLogger;
         private IMatchController? matchController;
 
-        private ServerMultiplayerRoom(long roomId, IMultiplayerHubContext hub, IDatabaseFactory dbFactory, MultiplayerEventLogger eventLogger)
+        private ServerMultiplayerRoom(long roomId, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventLogger eventLogger)
             : base(roomId)
         {
             this.hub = hub;
@@ -50,7 +50,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="eventLogger">The event logger.</param>
         /// <exception cref="InvalidOperationException">If the room does not exist in the database.</exception>
         /// <exception cref="InvalidStateException">If the match has already ended.</exception>
-        public static async Task<ServerMultiplayerRoom> InitialiseAsync(long roomId, IMultiplayerHubContext hub, IDatabaseFactory dbFactory, MultiplayerEventLogger eventLogger)
+        public static async Task<ServerMultiplayerRoom> InitialiseAsync(long roomId, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventLogger eventLogger)
         {
             ServerMultiplayerRoom room = new ServerMultiplayerRoom(roomId, hub, dbFactory, eventLogger);
 

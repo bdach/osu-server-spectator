@@ -11,9 +11,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
     public class HeadToHeadMatchController : StandardMatchController
     {
         private readonly ServerMultiplayerRoom room;
-        private readonly IMultiplayerHubContext hub;
+        private readonly IServerMultiplayerRoomController hub;
 
-        public HeadToHeadMatchController(ServerMultiplayerRoom room, IMultiplayerHubContext hub, IDatabaseFactory dbFactory)
+        public HeadToHeadMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory)
             : base(room, hub, dbFactory)
         {
             this.room = room;

@@ -47,7 +47,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         private readonly ISharedInterop sharedInterop;
         private readonly IDatabaseFactory databaseFactory;
         private readonly EntityStore<ServerMultiplayerRoom> rooms;
-        private readonly IMultiplayerHubContext hubContext;
+        private readonly IServerMultiplayerRoomController hubContext;
         private readonly ILogger logger;
         private readonly IMemoryCache memoryCache;
         private readonly MultiplayerEventLogger eventLogger;
@@ -56,7 +56,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         private DateTimeOffset lastQueueRefreshTime = DateTimeOffset.UnixEpoch;
 
         public MatchmakingQueueBackgroundService(IHubContext<MultiplayerHub> hub, ISharedInterop sharedInterop, IDatabaseFactory databaseFactory, ILoggerFactory loggerFactory,
-                                                 EntityStore<ServerMultiplayerRoom> rooms, IMultiplayerHubContext hubContext, IMemoryCache memoryCache, MultiplayerEventLogger eventLogger)
+                                                 EntityStore<ServerMultiplayerRoom> rooms, IServerMultiplayerRoomController hubContext, IMemoryCache memoryCache, MultiplayerEventLogger eventLogger)
         {
             this.hub = hub;
             this.sharedInterop = sharedInterop;
@@ -322,7 +322,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         /// <param name="eligibleUserIds">The users who are allowed to join the room.</param>
         /// <param name="poolId">The pool ID.</param>
         /// <exception cref="InvalidOperationException">If the room is not a matchmaking room in the database.</exception>
-        public static async Task<ServerMultiplayerRoom> InitialiseRoomAsync(long roomId, IMultiplayerHubContext hub, IDatabaseFactory dbFactory, MultiplayerEventLogger eventLogger,
+        public static async Task<ServerMultiplayerRoom> InitialiseRoomAsync(long roomId, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventLogger eventLogger,
                                                                             int[] eligibleUserIds, uint poolId)
         {
             ServerMultiplayerRoom room = await ServerMultiplayerRoom.InitialiseAsync(roomId, hub, dbFactory, eventLogger);

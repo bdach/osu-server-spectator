@@ -1,24 +1,25 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
-using osu.Game.Online.Multiplayer.Countdown;
 using osu.Game.Online.Rooms;
 using osu.Server.Spectator.Entities;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer
 {
-    /// <summary>
-    /// Allows communication with multiplayer clients from potentially outside of a direct <see cref="MultiplayerHub"/> context.
-    /// </summary>
-    public interface IMultiplayerHubContext
+    public interface IServerMultiplayerRoomController
     {
+        /// <summary>
+        /// Retrieves a <see cref="ServerMultiplayerRoom"/> usage.
+        /// </summary>
+        /// <param name="roomId">The ID of the room to retrieve.</param>
+        Task<ItemUsage<ServerMultiplayerRoom>?> TryGetRoom(long roomId);
+
         /// <summary>
         /// Notifies users in a room of an event.
         /// </summary>
@@ -79,35 +80,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         Task NotifySettingsChanged(ServerMultiplayerRoom room, bool playlistItemChanged);
 
         /// <summary>
-        /// Retrieves a <see cref="ServerMultiplayerRoom"/> usage.
-        /// </summary>
-        /// <param name="roomId">The ID of the room to retrieve.</param>
-        Task<ItemUsage<ServerMultiplayerRoom>?> TryGetRoom(long roomId);
-
-        Task InitialiseUserState(HubCallerContext caller);
-        Task CleanUpUserState(HubCallerContext caller);
-        Task<MultiplayerRoom> CreateRoom(HubCallerContext caller, MultiplayerRoom room);
-        Task<MultiplayerRoom> JoinRoomWithPassword(HubCallerContext caller, long roomId, string password);
-        Task LeaveRoom(HubCallerContext caller);
-        Task LeaveRoom(HubCallerContext caller, MultiplayerClientState state, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick);
-        Task<long> CloseRoom(HubCallerContext caller);
-        Task InvitePlayer(HubCallerContext caller, int userId);
-        Task TransferHost(HubCallerContext caller, int userId);
-        Task KickUser(HubCallerContext caller, int userId);
-        Task StartMatchCountdown(HubCallerContext caller, StartMatchCountdownRequest request);
-        Task StartMatchCountdown(HubCallerContext caller, ServerMultiplayerRoom room, StartMatchCountdownRequest request);
-        Task StopMatchCountdown(HubCallerContext caller);
-        Task StopCountdown(HubCallerContext caller, ServerMultiplayerRoom room, StopCountdownRequest request);
-        Task StartMatch(HubCallerContext caller);
-        Task AbortMatch(HubCallerContext caller);
-        Task AddPlaylistItem(HubCallerContext caller, MultiplayerPlaylistItem item);
-        Task EditPlaylistItem(HubCallerContext caller, MultiplayerPlaylistItem item);
-        Task EditCurrentPlaylistItem(HubCallerContext caller, Action<MultiplayerPlaylistItem> changeFunc);
-        Task RemovePlaylistItem(HubCallerContext caller, long playlistItemId);
-        Task ChangeSettings(HubCallerContext caller, MultiplayerRoomSettings settings);
-        Task ChangeSettings(HubCallerContext caller, Action<MultiplayerRoomSettings> changeFunc);
-
-        /// <summary>
         /// Unreadies all users in a room.
         /// </summary>
         /// <remarks>
@@ -136,8 +108,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <exception cref="InvalidStateException">If the new selection is not valid for current playlist item.</exception>
         Task ChangeUserMods(IEnumerable<APIMod> newMods, ServerMultiplayerRoom room, MultiplayerRoomUser user);
 
-        Task ChangeAndBroadcastUserState(HubCallerContext caller, MultiplayerUserState state);
-        
         /// <summary>
         /// Changes a user's state in a room.
         /// </summary>
@@ -146,8 +116,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="state">The new state.</param>
         Task ChangeAndBroadcastUserState(ServerMultiplayerRoom room, MultiplayerRoomUser user, MultiplayerUserState state);
 
-        Task ChangeAndBroadcastUserBeatmapAvailability(HubCallerContext caller, BeatmapAvailability beatmapAvailability);
-        
         /// <summary>
         /// Changes a user's beatmap availability for the current playlist item.
         /// </summary>
@@ -155,13 +123,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="user">The user.</param>
         /// <param name="availability">The new availability.</param>
         Task ChangeAndBroadcastUserBeatmapAvailability(ServerMultiplayerRoom room, MultiplayerRoomUser user, BeatmapAvailability availability);
-
-        /// <summary>
-        /// Changes a room's state.
-        /// </summary>
-        /// <param name="room">The room.</param>
-        /// <param name="newState">The new room state.</param>
-        Task ChangeRoomState(ServerMultiplayerRoom room, MultiplayerRoomState newState);
 
         Task ChangeUserVoteToSkipIntro(ServerMultiplayerRoom room, MultiplayerRoomUser user, bool voted);
 
@@ -183,8 +144,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         Task CheckVotesToSkipPassed(ServerMultiplayerRoom room);
 
-        void Log(ServerMultiplayerRoom room, MultiplayerRoomUser? user, string message, LogLevel logLevel = LogLevel.Information);
+        Task LeaveRoom(int userId, MultiplayerClientState state, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick);
 
-        void Error(MultiplayerRoomUser? user, string message, Exception exception);
+        void Log(ServerMultiplayerRoom room, MultiplayerRoomUser? user, string message, LogLevel logLevel = LogLevel.Information);
     }
 }

@@ -14,10 +14,10 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
     public class TeamVersusMatchController : StandardMatchController
     {
         private readonly ServerMultiplayerRoom room;
-        private readonly IMultiplayerHubContext hub;
+        private readonly IServerMultiplayerRoomController hub;
         private readonly TeamVersusRoomState state;
 
-        public TeamVersusMatchController(ServerMultiplayerRoom room, IMultiplayerHubContext hub, IDatabaseFactory dbFactory)
+        public TeamVersusMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory)
             : base(room, hub, dbFactory)
         {
             this.room = room;
