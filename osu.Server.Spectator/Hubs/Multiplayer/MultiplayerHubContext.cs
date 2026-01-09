@@ -19,6 +19,7 @@ using osu.Game.Rulesets;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
 using osu.Server.Spectator.Extensions;
+using osu.Server.Spectator.Hubs.Referee;
 using osu.Server.Spectator.Services;
 using IDatabaseFactory = osu.Server.Spectator.Database.IDatabaseFactory;
 
@@ -384,9 +385,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task IServerMultiplayerRoomController.LeaveRoom(int userId, MultiplayerClientState state, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick)
         {
-            if (state.CurrentRoomID == null)
-                return;
-
             try
             {
                 var room = roomUsage.Item;
@@ -408,7 +406,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 try
                 {
                     // Run in background so we don't hold locks on user/room states.
-                    _ = sharedInterop.RemoveUserFromRoomAsync(state.UserId, state.CurrentRoomID.Value);
+                    _ = sharedInterop.RemoveUserFromRoomAsync(state.UserId, room.RoomID);
                 }
                 catch
                 {
@@ -547,7 +545,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             long roomId = await sharedInterop.CreateRoomAsync(caller.GetUserId(), room);
             await multiplayerEventLogger.LogRoomCreatedAsync(roomId, caller.GetUserId());
 
-            return await joinOrCreateRoom(caller, roomId, room.Settings.Password, true);
+            return await joinOrCreateRoom(caller, roomId, room.Settings.Password, true, MultiplayerRoomUserRole.Player);
         }
 
         async Task<MultiplayerRoom> IMultiplayerUserHubContext.JoinRoomWithPassword(HubCallerContext caller, long roomId, string password)
@@ -560,10 +558,10 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     throw new InvalidStateException("Can't join a room when restricted.");
             }
 
-            return await joinOrCreateRoom(caller, roomId, password, false);
+            return await joinOrCreateRoom(caller, roomId, password, false, MultiplayerRoomUserRole.Player);
         }
 
-        private async Task<MultiplayerRoom> joinOrCreateRoom(HubCallerContext caller, long roomId, string password, bool isNewRoom)
+        private async Task<MultiplayerRoom> joinOrCreateRoom(HubCallerContext caller, long roomId, string password, bool isNewRoom, MultiplayerRoomUserRole role)
         {
             byte[] roomBytes;
 
@@ -603,7 +601,16 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                             if (isNewRoom && room.Settings.MatchType != MatchType.Matchmaking)
                                 room.Host = roomUser;
 
-                            userUsage.Item.SetRoom(roomId);
+                            switch (role)
+                            {
+                                case MultiplayerRoomUserRole.Player:
+                                    userUsage.Item.SetRoom(roomId);
+                                    break;
+
+                                case MultiplayerRoomUserRole.Referee:
+                                    userUsage.Item.AddRefereedRoom(roomId);
+                                    break;
+                            }
 
                             // because match controllers may send subsequent information via Users collection hooks,
                             // inform clients before adding user to the room.
@@ -703,28 +710,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task IMultiplayerUserHubContext.InvitePlayer(HubCallerContext caller, int userId)
         {
-            using (var db = databaseFactory.GetInstance())
-            {
-                bool isRestricted = await db.IsUserRestrictedAsync(userId);
-                if (isRestricted)
-                    throw new InvalidStateException("Can't invite a restricted user to a room.");
-
-                var relation = await db.GetUserRelation(caller.GetUserId(), userId);
-
-                // The local user has the player they are trying to invite blocked.
-                if (relation?.foe == true)
-                    throw new UserBlockedException();
-
-                var inverseRelation = await db.GetUserRelation(userId, caller.GetUserId());
-
-                // The player being invited has the local user blocked.
-                if (inverseRelation?.foe == true)
-                    throw new UserBlockedException();
-
-                // The player being invited disallows unsolicited PMs and the local user is not their friend.
-                if (inverseRelation?.friend != true && !await db.GetUserAllowsPMs(userId))
-                    throw new UserBlocksPMsException();
-            }
+            await checkCanInvitePlayer(caller, userId);
 
             using (var userUsage = await getOrCreateUserState(caller))
             {
@@ -746,6 +732,32 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                     await context.Clients.User(userId.ToString()).SendAsync(nameof(IMultiplayerClient.Invited), user.UserId, room.RoomID, room.Settings.Password);
                 }
+            }
+        }
+
+        private async Task checkCanInvitePlayer(HubCallerContext caller, int userId)
+        {
+            using (var db = databaseFactory.GetInstance())
+            {
+                bool isRestricted = await db.IsUserRestrictedAsync(userId);
+                if (isRestricted)
+                    throw new InvalidStateException("Can't invite a restricted user to a room.");
+
+                var relation = await db.GetUserRelation(caller.GetUserId(), userId);
+
+                // The local user has the player they are trying to invite blocked.
+                if (relation?.foe == true)
+                    throw new UserBlockedException();
+
+                var inverseRelation = await db.GetUserRelation(userId, caller.GetUserId());
+
+                // The player being invited has the local user blocked.
+                if (inverseRelation?.foe == true)
+                    throw new UserBlockedException();
+
+                // The player being invited disallows unsolicited PMs and the local user is not their friend.
+                if (inverseRelation?.friend != true && !await db.GetUserAllowsPMs(userId))
+                    throw new UserBlocksPMsException();
             }
         }
 
@@ -1231,7 +1243,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         throw new InvalidOperationException("Local user was not found in the expected room");
 
                     log(room, $"Editing playlist item {item.ID} for beatmap {item.BeatmapID}");
-                    await room.Controller.EditPlaylistItem(item, user);
+                    await room.Controller.EditPlaylistItem(item, user, userUsage.Item);
                 }
             }
         }
@@ -1387,32 +1399,40 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task<MultiplayerRoom> IMultiplayerRefereeHubContext.CreateRoom(HubCallerContext caller, MultiplayerRoom room)
         {
-            var created = await ((IMultiplayerUserHubContext)this).CreateRoom(caller, room);
-            await ensureSpectating(caller);
+            log(caller, "Attempting to create room");
+
+            using (var db = databaseFactory.GetInstance())
+            {
+                if (await db.IsUserRestrictedAsync(caller.GetUserId()))
+                    throw new InvalidStateException("Can't create a room when restricted.");
+            }
+
+            long roomId = await sharedInterop.CreateRoomAsync(caller.GetUserId(), room);
+            await multiplayerEventLogger.LogRoomCreatedAsync(roomId, caller.GetUserId());
+
+            var created = await joinOrCreateRoom(caller, roomId, room.Settings.Password, true, MultiplayerRoomUserRole.Referee);
+            await ensureSpectating(caller, roomId);
             return created;
         }
 
-        async Task<long> IMultiplayerRefereeHubContext.CloseRoom(HubCallerContext caller)
+        async Task IMultiplayerRefereeHubContext.CloseRoom(HubCallerContext caller, long roomId)
         {
-            long roomId;
-
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
 
-                using (var roomUsage = await getUserRoom(userUsage.Item))
+                using (var roomUsage = await rooms.GetForUse(roomId))
                 {
                     var room = roomUsage.Item;
 
                     if (room == null)
-                        throw new InvalidOperationException("Attempted to operate on a null room");
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    ensureIsReferee(userUsage.Item, room);
 
                     log(room, caller, "Closing room");
-                    roomId = room.RoomID;
 
-                    ensureIsHost(caller, room);
-
-                    foreach (var user in room.Users.Where(u => u.UserID != room.Host?.UserID).ToArray())
+                    foreach (var user in room.Users.Where(u => u.UserID != caller.GetUserId()).ToArray())
                     {
                         using (var targetUserUsage = await users.GetForUse(user.UserID))
                         {
@@ -1427,50 +1447,142 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                     await ((IServerMultiplayerRoomController)this).LeaveRoom(caller.GetUserId(), userUsage.Item, roomUsage, true);
                 }
-            }
 
-            return roomId;
+                userUsage.Item.RemoveRefereedRoom(roomId);
+            }
         }
 
-        Task IMultiplayerRefereeHubContext.InvitePlayer(HubCallerContext caller, int userId)
-            => ((IMultiplayerUserHubContext)this).InvitePlayer(caller, userId);
+        async Task IMultiplayerRefereeHubContext.InvitePlayer(HubCallerContext caller, long roomId, int userId)
+        {
+            await checkCanInvitePlayer(caller, userId);
 
-        Task IMultiplayerRefereeHubContext.TransferHost(HubCallerContext caller, int userId)
-            => ((IMultiplayerUserHubContext)this).TransferHost(caller, userId);
+            using (var userUsage = await getOrCreateUserState(caller))
+            {
+                Debug.Assert(userUsage.Item != null);
 
-        Task IMultiplayerRefereeHubContext.KickUser(HubCallerContext caller, int userId)
-            => ((IMultiplayerUserHubContext)this).KickUser(caller, userId);
+                using (var roomUsage = await rooms.GetForUse(roomId))
+                {
+                    var user = userUsage.Item;
+                    var room = roomUsage.Item;
 
-        async Task IMultiplayerRefereeHubContext.StartMatchCountdown(HubCallerContext caller, StartMatchCountdownRequest request)
+                    if (room == null)
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    if (room.Settings.MatchType == MatchType.Matchmaking)
+                        throw new InvalidStateException("Can't invite players to matchmaking rooms.");
+
+                    ensureIsReferee(user, room);
+
+                    await context.Clients.User(userId.ToString()).SendAsync(nameof(IMultiplayerClient.Invited), user.UserId, room.RoomID, room.Settings.Password);
+                }
+            }
+        }
+
+        async Task IMultiplayerRefereeHubContext.TransferHost(HubCallerContext caller, long roomId, int userId)
         {
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
 
-                using (var roomUsage = await getUserRoom(userUsage.Item))
+                using (var roomUsage = await rooms.GetForUse(roomId))
                 {
                     var room = roomUsage.Item;
 
                     if (room == null)
-                        throw new InvalidOperationException("Attempted to operate on a null room");
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    log(room, caller, $"Transferring host from {room.Host?.UserID} to {userId}");
+                    roomId = room.RoomID;
+
+                    ensureIsReferee(userUsage.Item, room);
+
+                    var newHost = room.Users.FirstOrDefault(u => u.UserID == userId);
+
+                    if (newHost == null)
+                        throw new Exception("Target user is not in the current room");
+
+                    await setNewHost(room, newHost);
+                }
+            }
+
+            await multiplayerEventLogger.LogHostChangedAsync(roomId, userId);
+        }
+
+        async Task IMultiplayerRefereeHubContext.KickUser(HubCallerContext caller, long roomId, int userId)
+        {
+            using (var userUsage = await getOrCreateUserState(caller))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                using (var roomUsage = await rooms.GetForUse(roomId))
+                {
+                    var room = roomUsage.Item;
+
+                    if (room == null)
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    log(room, caller, $"Kicking user {userId}");
+                    roomId = room.RoomID;
+
+                    if (userId == userUsage.Item.UserId)
+                        throw new InvalidStateException("Can't kick self");
+
+                    ensureIsReferee(userUsage.Item, room);
+
+                    var kickTarget = room.Users.FirstOrDefault(u => u.UserID == userId);
+
+                    if (kickTarget == null)
+                        throw new InvalidOperationException("Target user is not in the current room");
+
+                    using (var targetUserUsage = await users.GetForUse(kickTarget.UserID))
+                    {
+                        Debug.Assert(targetUserUsage.Item != null);
+
+                        if (targetUserUsage.Item.CurrentRoomID == null)
+                            throw new InvalidOperationException();
+
+                        await ((IServerMultiplayerRoomController)this).LeaveRoom(caller.GetUserId(), targetUserUsage.Item, roomUsage, true);
+                    }
+                }
+            }
+
+            await multiplayerEventLogger.LogPlayerKickedAsync(roomId, userId);
+        }
+
+        async Task IMultiplayerRefereeHubContext.StartMatchCountdown(HubCallerContext caller, long roomId, StartMatchCountdownRequest request)
+        {
+            using (var userUsage = await getOrCreateUserState(caller))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                using (var roomUsage = await rooms.GetForUse(roomId))
+                {
+                    var room = roomUsage.Item;
+
+                    if (room == null)
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    ensureIsReferee(userUsage.Item, room);
 
                     await startMatchCountdown(caller, room, request);
                 }
             }
         }
 
-        async Task IMultiplayerRefereeHubContext.StopMatchCountdown(HubCallerContext caller)
+        async Task IMultiplayerRefereeHubContext.StopMatchCountdown(HubCallerContext caller, long roomId)
         {
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
 
-                using (var roomUsage = await getUserRoom(userUsage.Item))
+                using (var roomUsage = await rooms.GetForUse(roomId))
                 {
                     var room = roomUsage.Item;
 
                     if (room == null)
-                        throw new InvalidOperationException("Attempted to operate on a null room");
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    ensureIsReferee(userUsage.Item, room);
 
                     foreach (var countdown in room.ActiveCountdowns.OfType<MatchStartCountdown>())
                         await room.StopCountdown(countdown);
@@ -1478,22 +1590,69 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
         }
 
-        Task IMultiplayerRefereeHubContext.StartMatch(HubCallerContext caller)
-            => ((IMultiplayerUserHubContext)this).StartMatch(caller);
-
-        async Task IMultiplayerRefereeHubContext.AbortMatch(HubCallerContext caller)
-        {
-            await ((IMultiplayerUserHubContext)this).AbortMatch(caller);
-            await ensureSpectating(caller);
-        }
-
-        async Task IMultiplayerRefereeHubContext.EditCurrentPlaylistItem(HubCallerContext caller, Action<MultiplayerPlaylistItem> changeFunc)
+        async Task IMultiplayerRefereeHubContext.StartMatch(HubCallerContext caller, long roomId)
         {
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
 
-                using (var roomUsage = await getUserRoom(userUsage.Item))
+                using (var roomUsage = await rooms.GetForUse(roomId))
+                {
+                    var room = roomUsage.Item;
+
+                    if (room == null)
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    ensureIsReferee(userUsage.Item, room);
+
+                    // TODO: to reconsider. currently being worked around by ensuring all referees are in spectating state, but i dunno.
+                    if (room.Host != null && room.Host.State != MultiplayerUserState.Spectating && room.Host.State != MultiplayerUserState.Ready)
+                        throw new InvalidStateException("Can't start match when the host is not ready.");
+
+                    if (room.Users.All(u => u.State != MultiplayerUserState.Ready))
+                        throw new InvalidStateException("Can't start match when no users are ready.");
+
+                    await ((IServerMultiplayerRoomController)this).StartMatch(room);
+                }
+            }
+        }
+
+        async Task IMultiplayerRefereeHubContext.AbortMatch(HubCallerContext caller, long roomId)
+        {
+            using (var userUsage = await getOrCreateUserState(caller))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                using (var roomUsage = await rooms.GetForUse(roomId))
+                {
+                    var room = roomUsage.Item;
+                    if (room == null)
+                        throw new InvalidOperationException("The specified room does not exist");
+
+                    ensureIsReferee(userUsage.Item, room);
+
+                    if (room.State != MultiplayerRoomState.WaitingForLoad && room.State != MultiplayerRoomState.Playing)
+                        throw new InvalidStateException("Cannot abort a match that hasn't started.");
+
+                    foreach (var user in room.Users)
+                        await ((IServerMultiplayerRoomController)this).ChangeAndBroadcastUserState(room, user, MultiplayerUserState.Idle);
+
+                    await context.Clients.Group(MultiplayerHub.GetGroupId(room.RoomID)).SendAsync(nameof(IMultiplayerClient.GameplayAborted), GameplayAbortReason.HostAbortedTheMatch);
+
+                    await ((IServerMultiplayerRoomController)this).UpdateRoomStateIfRequired(room);
+                }
+            }
+
+            await ensureSpectating(caller, roomId);
+        }
+
+        async Task IMultiplayerRefereeHubContext.EditCurrentPlaylistItem(HubCallerContext caller, long roomId, Action<MultiplayerPlaylistItem> changeFunc)
+        {
+            using (var userUsage = await getOrCreateUserState(caller))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                using (var roomUsage = await rooms.GetForUse(roomId))
                 {
                     var room = roomUsage.Item;
                     if (room == null)
@@ -1507,18 +1666,18 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     changeFunc.Invoke(currentItem);
 
                     log(room, $"Editing playlist item {currentItem.ID} for beatmap {currentItem.BeatmapID}");
-                    await room.Controller.EditPlaylistItem(currentItem, user);
+                    await room.Controller.EditPlaylistItem(currentItem, user, userUsage.Item);
                 }
             }
         }
 
-        async Task IMultiplayerRefereeHubContext.ChangeSettings(HubCallerContext caller, Action<MultiplayerRoomSettings> changeFunc)
+        async Task IMultiplayerRefereeHubContext.ChangeSettings(HubCallerContext caller, long roomId, Action<MultiplayerRoomSettings> changeFunc)
         {
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
 
-                using (var roomUsage = await getUserRoom(userUsage.Item))
+                using (var roomUsage = await rooms.GetForUse(roomId))
                 {
                     var room = roomUsage.Item;
 
@@ -1528,7 +1687,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     if (room.State != MultiplayerRoomState.Open)
                         throw new InvalidStateException("Attempted to change settings while game is active");
 
-                    ensureIsHost(caller, room);
+                    ensureIsReferee(userUsage.Item, room);
 
                     log(room, "Settings updating");
 
@@ -1549,10 +1708,30 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
         }
 
-        private async Task ensureSpectating(HubCallerContext caller)
+        private async Task ensureSpectating(HubCallerContext caller, long roomId)
         {
-            await ((IMultiplayerUserHubContext)this).ChangeAndBroadcastUserState(caller, MultiplayerUserState.Spectating);
-            await ((IMultiplayerUserHubContext)this).ChangeAndBroadcastUserBeatmapAvailability(caller, BeatmapAvailability.NotDownloaded());
+            using (var userUsage = await getOrCreateUserState(caller))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                using (var roomUsage = await rooms.GetForUse(roomId))
+                {
+                    var room = roomUsage.Item;
+
+                    if (room == null)
+                        throw new InvalidOperationException("Attempted to operate on a null room");
+
+                    ensureIsReferee(userUsage.Item, room);
+
+                    var user = room.Users.SingleOrDefault(u => u.UserID == userUsage.Item.UserId);
+
+                    if (user == null)
+                        throw new InvalidOperationException("User not in room");
+
+                    await ((IServerMultiplayerRoomController)this).ChangeAndBroadcastUserState(room, user, MultiplayerUserState.Spectating);
+                    await ((IServerMultiplayerRoomController)this).ChangeAndBroadcastUserBeatmapAvailability(room, user, BeatmapAvailability.NotDownloaded());
+                }
+            }
         }
 
         #endregion
@@ -1588,6 +1767,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             if (room.Host?.UserID != caller.GetUserId())
                 throw new NotHostException();
+        }
+
+        private void ensureIsReferee(MultiplayerClientState clientState, MultiplayerRoom room)
+        {
+            if (!clientState.RefereedRoomIDs.Contains(room.RoomID))
+                throw new NotRefereeException();
         }
 
         public static bool IsGameplayState(MultiplayerUserState state)
@@ -1674,6 +1859,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 room.RoomID,
                 message.Trim());
         }
-        
+
+        private enum MultiplayerRoomUserRole
+        {
+            Player,
+            Referee,
+        }
     }
 }

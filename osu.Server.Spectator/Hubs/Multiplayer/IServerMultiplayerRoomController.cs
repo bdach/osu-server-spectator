@@ -2,7 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using Microsoft.Extensions.Logging;
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using osu.Game.Online.API;

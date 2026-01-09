@@ -54,34 +54,31 @@ namespace osu.Server.Spectator.Hubs.Referee
             return created.RoomID;
         }
 
-        // TODO: currently this is all still beholden to the "user can only be in one room at a time" principle
-        // rolling with it for now just to see all of this do something, but eventually this will have to change
-        public async Task<long> CloseRoom()
+        public async Task CloseRoom(long roomId)
         {
-            long roomId = await multiplayerHubContext.CloseRoom(Context);
+            await multiplayerHubContext.CloseRoom(Context, roomId);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, MultiplayerHub.GetGroupId(roomId));
-            return roomId;
         }
 
-        public async Task SetRoomName(string roomName)
-            => await multiplayerHubContext.ChangeSettings(Context, room => room.Name = roomName);
+        public async Task SetRoomName(long roomId, string roomName)
+            => await multiplayerHubContext.ChangeSettings(Context, roomId, room => room.Name = roomName);
 
-        public async Task SetRoomPassword(string password)
-            => await multiplayerHubContext.ChangeSettings(Context, room => room.Password = password);
+        public async Task SetRoomPassword(long roomId, string password)
+            => await multiplayerHubContext.ChangeSettings(Context, roomId, room => room.Password = password);
 
-        public async Task SetMatchType(MatchType matchType)
-            => await multiplayerHubContext.ChangeSettings(Context, room => room.MatchType = matchType);
+        public async Task SetMatchType(long roomId, MatchType matchType)
+            => await multiplayerHubContext.ChangeSettings(Context, roomId, room => room.MatchType = matchType);
 
-        public async Task InvitePlayer(int userId)
-            => await multiplayerHubContext.InvitePlayer(Context, userId);
+        public async Task InvitePlayer(long roomId, int userId)
+            => await multiplayerHubContext.InvitePlayer(Context, roomId, userId);
 
-        public async Task SetHost(int userId)
-            => await multiplayerHubContext.TransferHost(Context, userId);
+        public async Task SetHost(long roomId, int userId)
+            => await multiplayerHubContext.TransferHost(Context, roomId, userId);
 
-        public async Task KickUser(int userId)
-            => await multiplayerHubContext.KickUser(Context, userId);
+        public async Task KickUser(long roomId, int userId)
+            => await multiplayerHubContext.KickUser(Context, roomId, userId);
 
-        public async Task SetBeatmap(int beatmapId, int? rulesetId)
+        public async Task SetBeatmap(long roomId, int beatmapId, int? rulesetId)
         {
             using var connection = db.GetInstance();
             var databaseBeatmap = await connection.GetBeatmapAsync(beatmapId);
@@ -89,7 +86,7 @@ namespace osu.Server.Spectator.Hubs.Referee
             if (databaseBeatmap == null)
                 throw new HubException($"Beatmap with id {beatmapId} not found.");
 
-            await multiplayerHubContext.EditCurrentPlaylistItem(Context, item =>
+            await multiplayerHubContext.EditCurrentPlaylistItem(Context, roomId, item =>
             {
                 item.BeatmapID = beatmapId;
                 // TODO: this is a bit stupid...
@@ -100,28 +97,28 @@ namespace osu.Server.Spectator.Hubs.Referee
 
         // TODO: mod settings don't work as they should here, likely due to serialisation foibles.
         // maybe we want to be accepting string blobs here and only deserialising on c# side....
-        public async Task SetRequiredMods(APIMod[] mods)
-            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, item => item.RequiredMods = mods);
+        public async Task SetRequiredMods(long roomId, APIMod[] mods)
+            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, roomId, item => item.RequiredMods = mods);
 
-        public async Task SetAllowedMods(APIMod[] mods)
-            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, item => item.AllowedMods = mods);
+        public async Task SetAllowedMods(long roomId, APIMod[] mods)
+            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, roomId, item => item.AllowedMods = mods);
 
-        public async Task SetFreestyle(bool enabled)
-            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, item => item.Freestyle = enabled);
+        public async Task SetFreestyle(long roomId, bool enabled)
+            => await multiplayerHubContext.EditCurrentPlaylistItem(Context, roomId, item => item.Freestyle = enabled);
 
-        public async Task StartGameplay(int? countdown)
+        public async Task StartGameplay(long roomId, int? countdown)
         {
             if (countdown == null)
-                await multiplayerHubContext.StartMatch(Context);
+                await multiplayerHubContext.StartMatch(Context, roomId);
             else
-                await multiplayerHubContext.StartMatchCountdown(Context, new StartMatchCountdownRequest { Duration = TimeSpan.FromSeconds(countdown.Value) });
+                await multiplayerHubContext.StartMatchCountdown(Context, roomId, new StartMatchCountdownRequest { Duration = TimeSpan.FromSeconds(countdown.Value) });
         }
 
-        public async Task AbortGameplayCountdown()
-            => await multiplayerHubContext.StopMatchCountdown(Context);
+        public async Task AbortGameplayCountdown(long roomId)
+            => await multiplayerHubContext.StopMatchCountdown(Context, roomId);
 
-        public async Task AbortGameplay()
-            => await multiplayerHubContext.AbortMatch(Context);
+        public async Task AbortGameplay(long roomId)
+            => await multiplayerHubContext.AbortMatch(Context, roomId);
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {

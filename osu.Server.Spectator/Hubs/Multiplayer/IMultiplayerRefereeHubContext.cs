@@ -15,15 +15,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         Task InitialiseUserState(HubCallerContext caller);
         Task CleanUpUserState(HubCallerContext caller);
         Task<MultiplayerRoom> CreateRoom(HubCallerContext caller, MultiplayerRoom room);
-        Task<long> CloseRoom(HubCallerContext caller);
-        Task InvitePlayer(HubCallerContext caller, int userId);
-        Task TransferHost(HubCallerContext caller, int userId);
-        Task KickUser(HubCallerContext caller, int userId);
-        Task StartMatchCountdown(HubCallerContext caller, StartMatchCountdownRequest request);
-        Task StopMatchCountdown(HubCallerContext caller);
-        Task StartMatch(HubCallerContext caller);
-        Task AbortMatch(HubCallerContext caller);
-        Task EditCurrentPlaylistItem(HubCallerContext caller, Action<MultiplayerPlaylistItem> changeFunc);
-        Task ChangeSettings(HubCallerContext caller, Action<MultiplayerRoomSettings> changeFunc);
+        Task CloseRoom(HubCallerContext caller, long roomId);
+        Task InvitePlayer(HubCallerContext caller, long roomId, int userId);
+        Task TransferHost(HubCallerContext caller, long roomId, int userId);
+        Task KickUser(HubCallerContext caller, long roomId, int userId);
+        Task StartMatchCountdown(HubCallerContext caller, long roomId, StartMatchCountdownRequest request);
+        Task StopMatchCountdown(HubCallerContext caller, long roomId);
+        Task StartMatch(HubCallerContext caller, long roomId);
+        Task AbortMatch(HubCallerContext caller, long roomId);
+        Task EditCurrentPlaylistItem(HubCallerContext caller, long roomId, Action<MultiplayerPlaylistItem> changeFunc);
+        Task ChangeSettings(HubCallerContext caller, long roomId, Action<MultiplayerRoomSettings> changeFunc);
     }
 }

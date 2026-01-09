@@ -167,7 +167,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             }
         }
 
-        public virtual async Task EditPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user)
+        public virtual async Task EditPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user, MultiplayerClientState clientState)
         {
             if (item.Freestyle && item.AllowedMods.Any())
                 throw new InvalidStateException("Cannot enqueue freestyle item with mods.");
@@ -203,7 +203,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                 if (existingItem == null)
                     throw new InvalidStateException("Attempted to change an item that doesn't exist.");
 
-                if (existingItem.OwnerID != user.UserID && !user.Equals(room.Host))
+                if (existingItem.OwnerID != user.UserID && !user.Equals(room.Host) && !clientState.RefereedRoomIDs.Contains(room.RoomID))
                     throw new InvalidStateException("Attempted to change an item which is not owned by the user.");
 
                 if (existingItem.Expired)

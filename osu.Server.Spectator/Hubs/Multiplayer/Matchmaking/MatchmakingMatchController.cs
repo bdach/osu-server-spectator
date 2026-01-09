@@ -210,7 +210,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
             return Task.CompletedTask;
         }
 
-        public Task EditPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user)
+        public Task EditPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user, MultiplayerClientState clientState)
         {
             return Task.CompletedTask;
         }

@@ -55,7 +55,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <exception cref="InvalidStateException">If the given playlist item is not valid.</exception>
         Task AddPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user);
 
-        Task EditPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user);
+        Task EditPlaylistItem(MultiplayerPlaylistItem item, MultiplayerRoomUser user, MultiplayerClientState clientState);
 
         /// <summary>
         /// Removes a playlist item from the room's queue.
