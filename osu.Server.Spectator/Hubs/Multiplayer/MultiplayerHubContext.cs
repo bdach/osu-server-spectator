@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR;
@@ -626,7 +625,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                             room.UpdateForRetrieval();
 
                             await addDatabaseUser(room, roomUser);
-                            await context.Groups.AddToGroupAsync(caller.ConnectionId, MultiplayerHub.GetGroupId(roomId));
+
+                            if (role == MultiplayerRoomUserRole.Player)
+                                await context.Groups.AddToGroupAsync(caller.ConnectionId, MultiplayerHub.GetGroupId(roomId));
 
                             log(room, caller, "User joined");
                         }
