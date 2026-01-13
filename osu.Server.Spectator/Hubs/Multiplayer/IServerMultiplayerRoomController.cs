@@ -18,7 +18,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// </summary>
         /// <param name="roomId">The ID of the room to retrieve.</param>
         Task<ItemUsage<ServerMultiplayerRoom>?> TryGetRoom(long roomId);
-
+        
         /// <summary>
         /// Notifies users in a room of an event.
         /// </summary>
@@ -143,7 +143,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         Task CheckVotesToSkipPassed(ServerMultiplayerRoom room);
 
-        Task LeaveRoom(int userId, MultiplayerClientState state, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick);
+        Task<MultiplayerRoom> JoinOrCreateRoom(long roomId, ItemUsage<ServerMultiplayerRoom> roomUsage, ItemUsage<MultiplayerClientState> userUsage, string password, bool isNewRoom);
+
+        Task RemoveUserFromRoom(int removingUserId, MultiplayerClientState removedUserState, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick);
 
         void Log(ServerMultiplayerRoom room, MultiplayerRoomUser? user, string message, LogLevel logLevel = LogLevel.Information);
     }
