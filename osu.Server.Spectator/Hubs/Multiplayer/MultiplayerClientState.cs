@@ -33,13 +33,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             DogStatsd.Gauge($"{MultiplayerHub.STATSD_PREFIX}.users", Interlocked.Increment(ref countUsersInRooms));
         }
 
-        public void ClearRoom()
+        public void ClearRoom(long roomId)
         {
-            if (CurrentRoomID == null)
-                return;
+            if (CurrentRoomID == roomId)
+            {
+                CurrentRoomID = null;
+                DogStatsd.Gauge($"{MultiplayerHub.STATSD_PREFIX}.users", Interlocked.Decrement(ref countUsersInRooms));
+            }
 
-            CurrentRoomID = null;
-            DogStatsd.Gauge($"{MultiplayerHub.STATSD_PREFIX}.users", Interlocked.Decrement(ref countUsersInRooms));
+            RemoveRefereedRoom(roomId);
         }
 
         public void AddRefereedRoom(long roomId)

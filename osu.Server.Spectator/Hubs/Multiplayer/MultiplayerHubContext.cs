@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR;
@@ -385,11 +386,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task IServerMultiplayerRoomController.LeaveRoom(int userId, MultiplayerClientState state, ItemUsage<ServerMultiplayerRoom> roomUsage, bool wasKick)
         {
+            long? roomId = null;
+
             try
             {
                 var room = roomUsage.Item;
                 if (room == null)
                     throw new InvalidOperationException("Attempted to operate on a null room");
+
+                roomId = room.RoomID;
 
                 var user = room.Users.FirstOrDefault(u => u.UserID == state.UserId);
 
@@ -446,7 +451,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
             finally
             {
-                state.ClearRoom();
+                if (roomId != null)
+                    state.ClearRoom(roomId.Value);
             }
         }
 
@@ -649,7 +655,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                             finally
                             {
                                 // no matter how we end up cleaning up the room, ensure the user's state is cleared.
-                                userUsage.Item.ClearRoom();
+                                if (room != null)
+                                    userUsage.Item.ClearRoom(room.RoomID);
                             }
 
                             throw;
@@ -893,7 +900,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 }
             }
         }
-        
+
         /// <summary>
         /// Given a room and a state transition, throw if there's an issue with the sequence of events.
         /// </summary>
@@ -1392,9 +1399,19 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task IMultiplayerRefereeHubContext.CleanUpUserState(HubCallerContext caller)
         {
-            // todo reconsider
             using (var usage = await getOrCreateUserState(caller))
+            {
+                if (usage.Item == null)
+                    return;
+
+                foreach (var roomId in usage.Item.RefereedRoomIDs ?? [])
+                {
+                    using (var room = await rooms.GetForUse(roomId))
+                        await ((IServerMultiplayerRoomController)this).LeaveRoom(caller.GetUserId(), usage.Item, room, false);
+                }
+
                 usage.Item = null;
+            }
         }
 
         async Task<MultiplayerRoom> IMultiplayerRefereeHubContext.CreateRoom(HubCallerContext caller, MultiplayerRoom room)
@@ -1657,6 +1674,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     var room = roomUsage.Item;
                     if (room == null)
                         throw new InvalidOperationException("Attempted to operate on a null room");
+
+                    ensureIsReferee(userUsage.Item, room);
 
                     var user = room.Users.FirstOrDefault(u => u.UserID == caller.GetUserId());
                     if (user == null)
