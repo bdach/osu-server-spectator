@@ -98,6 +98,19 @@ namespace osu.Server.Spectator
                             ? ConfigureJwtBearerOptions.REFEREE_AUTH_CODE_SCHEME
                             : ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME;
                     });
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy(ConfigureJwtBearerOptions.LAZER_CLIENT_SCHEME, policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireClaim("scopes", "*");
+                });
+                options.AddPolicy(ConfigureJwtBearerOptions.REFEREE_AUTH_CODE_SCHEME, policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireClaim("scopes", "multiplayer.write");
+                });
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

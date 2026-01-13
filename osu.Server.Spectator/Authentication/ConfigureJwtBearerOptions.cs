@@ -108,10 +108,6 @@ namespace osu.Server.Spectator.Authentication
 
             options.Events = new JwtBearerEvents
             {
-                OnAuthenticationFailed = e =>
-                {
-                    return Task.CompletedTask;
-                },
                 OnTokenValidated = async context =>
                 {
                     var jwtToken = (JsonWebToken)context.SecurityToken;
@@ -143,9 +139,9 @@ namespace osu.Server.Spectator.Authentication
             {
                 IssuerSigningKey = new RsaSecurityKey(rsa),
                 // there could be multiple valid audiences here, so we're not checking.
-                // TODO: maybe rethink that later.
+                // the access to the referee API is controlled by possessing the `multiplayer.write` scope instead,
+                // and that scope is checked for at endpoint access time via `[Authorize]` attributes rather than at JWT validation time.
                 ValidateAudience = false,
-                // TODO: figure out why this isn't included in the token.
                 ValidateIssuer = false,
                 ValidIssuer = "https://osu.ppy.sh/",
             };
@@ -154,6 +150,7 @@ namespace osu.Server.Spectator.Authentication
             {
                 OnMessageReceived = context =>
                 {
+                    // see https://learn.microsoft.com/en-us/aspnet/core/signalr/authn-and-authz?view=aspnetcore-10.0#built-in-jwt-authentication
                     var accessToken = context.Request.Query["access_token"];
                     if (!string.IsNullOrEmpty(accessToken))
                         context.Token = accessToken;

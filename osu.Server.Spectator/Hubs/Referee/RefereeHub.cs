@@ -3,17 +3,20 @@
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Multiplayer.Countdown;
 using osu.Game.Online.Rooms;
+using osu.Server.Spectator.Authentication;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Hubs.Multiplayer;
 
 namespace osu.Server.Spectator.Hubs.Referee
 {
+    [Authorize(ConfigureJwtBearerOptions.REFEREE_AUTH_CODE_SCHEME)]
     public class RefereeHub : Hub
     {
         private readonly IDatabaseFactory db;
