@@ -33,7 +33,5 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         Task EditPlaylistItem(HubCallerContext caller, MultiplayerPlaylistItem item);
         Task RemovePlaylistItem(HubCallerContext caller, long playlistItemId);
         Task ChangeSettings(HubCallerContext caller, MultiplayerRoomSettings settings);
-        Task ChangeAndBroadcastUserState(HubCallerContext caller, MultiplayerUserState state);
-        Task ChangeAndBroadcastUserBeatmapAvailability(HubCallerContext caller, BeatmapAvailability beatmapAvailability);
     }
 }
