@@ -99,7 +99,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
         private readonly ServerMultiplayerRoom room;
         private readonly IServerMultiplayerRoomController hub;
         private readonly IDatabaseFactory dbFactory;
-        private readonly IMatchmakingEventNotifier eventLogger;
+        private readonly MultiplayerEventNotifier eventNotifier;
         private readonly MatchmakingRoomState state;
         private readonly Dictionary<int, long> userPicks = new Dictionary<int, long>();
 
@@ -107,12 +107,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
         private bool anyPlayerQuit;
         private bool statsUpdatePending = true;
 
-        public MatchmakingMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, IMatchmakingEventNotifier eventLogger)
+        public MatchmakingMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventNotifier eventNotifier)
         {
             this.room = room;
             this.hub = hub;
             this.dbFactory = dbFactory;
-            this.eventLogger = eventLogger;
+            this.eventNotifier = eventNotifier;
 
             room.MatchState = state = new MatchmakingRoomState();
             room.Settings.PlaylistItemId = room.Playlist[Random.Shared.Next(0, room.Playlist.Count)].ID;
@@ -120,7 +120,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
 
         public async Task Initialise()
         {
-            await hub.NotifyMatchRoomStateChanged(room);
+            await eventNotifier.OnMatchRoomStateChangedAsync(room.RoomID, room.MatchState);
             await startCountdown(TimeSpan.FromSeconds(stage_waiting_for_clients_join_time), stageRoundWarmupTime);
         }
 
@@ -139,7 +139,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
                 // Expire and let clients know that the current item has finished.
                 await db.MarkPlaylistItemAsPlayedAsync(room.RoomID, CurrentItem.ID);
                 room.Playlist[room.Playlist.IndexOf(CurrentItem)] = (await db.GetPlaylistItemAsync(room.RoomID, CurrentItem.ID)).ToMultiplayerPlaylistItem();
-                await hub.NotifyPlaylistItemChanged(room, CurrentItem, true);
+                await hub.OnPlaylistItemChanged(room, CurrentItem, true);
             }
 
             Dictionary<int, SoloScore> scores = new Dictionary<int, SoloScore>();
@@ -160,7 +160,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
             switch (request)
             {
                 case MatchmakingAvatarActionRequest avatarAction:
-                    await hub.NotifyNewMatchEvent(room, new MatchmakingAvatarActionEvent
+                    await eventNotifier.OnNewMatchEventAsync(room.RoomID, new MatchmakingAvatarActionEvent
                     {
                         UserId = user.UserID,
                         Action = avatarAction.Action
@@ -174,7 +174,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
             switch (state.Stage)
             {
                 case MatchmakingStage.WaitingForClientsJoin:
-                    await eventLogger.OnPlayerJoinedAsync(room.RoomID, user.UserID);
+                    await eventNotifier.OnPlayerJoinedMatchmakingAsync(room.RoomID, user.UserID);
 
                     if (++joinedUserCount >= state.Users.Count)
                         await stageRoundWarmupTime(room);
@@ -191,7 +191,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
             {
                 state.Users.GetOrAdd(user.UserID).AbandonedAt = DateTimeOffset.UtcNow;
                 state.RecordScores([], placement_points); // Empty update to adjust placements.
-                await hub.NotifyMatchRoomStateChanged(room);
+                await eventNotifier.OnMatchRoomStateChangedAsync(room.RoomID, state);
             }
 
             // Attempt to conclude the match in advance so users don't have to keep playing rounds by themselves.
@@ -305,7 +305,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
         private async Task stageServerBeatmapFinalised(ServerMultiplayerRoom _)
         {
             foreach ((int userId, long playlistItemId) in userPicks)
-                await eventLogger.OnPlayerBeatmapPickAsync(room.RoomID, userId, playlistItemId);
+                await eventNotifier.OnPlayerBeatmapPickAsync(room.RoomID, userId, playlistItemId);
 
             long[] pickIds = userPicks.Values.ToArray();
 
@@ -331,9 +331,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
             // The settings playlist item controls various components by the client such as download tracking,
             // so it is set as late as possible to not inedvertently reveal it before animations are complete.
             room.Settings.PlaylistItemId = state.GameplayItem;
-            await hub.NotifySettingsChanged(room, true);
+            await hub.OnSettingsChanged(room, true);
 
-            await eventLogger.OnFinalBeatmapSelectedAsync(room.RoomID, room.Settings.PlaylistItemId);
+            await eventNotifier.OnFinalBeatmapSelectedAsync(room.RoomID, room.Settings.PlaylistItemId);
 
             await changeStage(MatchmakingStage.WaitingForClientsBeatmapDownload);
             await tryAdvanceStage();
@@ -432,7 +432,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
         private async Task changeStage(MatchmakingStage stage)
         {
             state.Stage = stage;
-            await hub.NotifyMatchRoomStateChanged(room);
+            await eventNotifier.OnMatchRoomStateChangedAsync(room.RoomID, state);
         }
 
         private async Task startCountdown(TimeSpan duration, Func<ServerMultiplayerRoom, Task> continuation)

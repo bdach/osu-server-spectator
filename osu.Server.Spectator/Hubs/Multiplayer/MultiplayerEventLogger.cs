@@ -264,7 +264,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <summary>
         /// Records a user joining a matchmaking room.
         /// </summary>
-        Task IMatchmakingEventNotifier.OnPlayerJoinedAsync(long roomId, int userId) => logDatabaseEvent(new matchmaking_room_event
+        public Task OnPlayerJoinedMatchmakingAsync(long roomId, int userId) => logDatabaseEvent(new matchmaking_room_event
         {
             event_type = "user_join",
             room_id = roomId,
@@ -274,7 +274,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <summary>
         /// Records a user's individual beatmap selection.
         /// </summary>
-        Task IMatchmakingEventNotifier.OnPlayerBeatmapPickAsync(long roomId, int userId, long playlistItemId) => logDatabaseEvent(new matchmaking_room_event
+        public Task OnPlayerBeatmapPickAsync(long roomId, int userId, long playlistItemId) => logDatabaseEvent(new matchmaking_room_event
         {
             event_type = "user_pick",
             room_id = roomId,
@@ -285,7 +285,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <summary>
         /// Records the final gameplay beatmap as selected by the server.
         /// </summary>
-        Task IMatchmakingEventNotifier.OnFinalBeatmapSelectedAsync(long roomId, long playlistItemId) => logDatabaseEvent(new matchmaking_room_event
+        public Task OnFinalBeatmapSelectedAsync(long roomId, long playlistItemId) => logDatabaseEvent(new matchmaking_room_event
         {
             event_type = "gameplay_beatmap",
             room_id = roomId,

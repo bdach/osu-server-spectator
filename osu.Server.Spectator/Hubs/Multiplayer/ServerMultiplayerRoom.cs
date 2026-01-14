@@ -28,15 +28,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         private readonly IServerMultiplayerRoomController hub;
         private readonly IDatabaseFactory dbFactory;
-        private readonly MultiplayerEventNotifier eventLogger;
+        private readonly MultiplayerEventNotifier eventNotifier;
         private IMatchController? matchController;
 
-        private ServerMultiplayerRoom(long roomId, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventNotifier eventLogger)
+        private ServerMultiplayerRoom(long roomId, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventNotifier eventNotifier)
             : base(roomId)
         {
             this.hub = hub;
             this.dbFactory = dbFactory;
-            this.eventLogger = eventLogger;
+            this.eventNotifier = eventNotifier;
         }
 
         /// <summary>
@@ -114,13 +114,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             switch (type)
             {
                 case MatchType.Matchmaking:
-                    return ChangeMatchType(new MatchmakingMatchController(this, hub, dbFactory, eventLogger));
+                    return ChangeMatchType(new MatchmakingMatchController(this, hub, dbFactory, eventNotifier));
 
                 case MatchType.TeamVersus:
-                    return ChangeMatchType(new TeamVersusMatchController(this, hub, dbFactory));
+                    return ChangeMatchType(new TeamVersusMatchController(this, hub, dbFactory, eventNotifier));
 
                 default:
-                    return ChangeMatchType(new HeadToHeadMatchController(this, hub, dbFactory));
+                    return ChangeMatchType(new HeadToHeadMatchController(this, hub, dbFactory, eventNotifier));
             }
         }
 
@@ -171,7 +171,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             trackedCountdowns[countdown] = countdownInfo;
             ActiveCountdowns.Add(countdown);
 
-            await hub.NotifyNewMatchEvent(this, new CountdownStartedEvent(countdown));
+            await eventNotifier.OnNewMatchEventAsync(RoomID, new CountdownStartedEvent(countdown));
 
             countdownInfo.Task = start();
 
@@ -243,7 +243,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             trackedCountdowns.Remove(countdown);
             ActiveCountdowns.Remove(countdownInfo.Countdown);
 
-            await hub.NotifyNewMatchEvent(this, new CountdownStoppedEvent(countdownInfo.Countdown.ID));
+            await eventNotifier.OnNewMatchEventAsync(RoomID, new CountdownStoppedEvent(countdownInfo.Countdown.ID));
         }
 
         /// <summary>

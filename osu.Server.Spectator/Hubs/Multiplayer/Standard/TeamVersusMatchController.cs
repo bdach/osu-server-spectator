@@ -14,14 +14,14 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
     public class TeamVersusMatchController : StandardMatchController
     {
         private readonly ServerMultiplayerRoom room;
-        private readonly IServerMultiplayerRoomController hub;
         private readonly TeamVersusRoomState state;
+        private readonly IMultiplayerRoomEventNotifier eventNotifier;
 
-        public TeamVersusMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory)
-            : base(room, hub, dbFactory)
+        public TeamVersusMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, IMultiplayerRoomEventNotifier eventNotifier)
+            : base(room, hub, dbFactory, eventNotifier)
         {
             this.room = room;
-            this.hub = hub;
+            this.eventNotifier = eventNotifier;
 
             room.MatchState = state = TeamVersusRoomState.CreateDefault();
         }
@@ -30,7 +30,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
         {
             await base.Initialise();
 
-            await hub.NotifyMatchRoomStateChanged(room);
+            await eventNotifier.OnMatchRoomStateChangedAsync(room.RoomID, state);
         }
 
         public override async Task HandleUserJoined(MultiplayerRoomUser user)
@@ -38,7 +38,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             await base.HandleUserJoined(user);
 
             user.MatchState = new TeamVersusUserState { TeamID = getBestAvailableTeam() };
-            await hub.NotifyMatchUserStateChanged(room, user);
+            await eventNotifier.OnMatchUserStateChangedAsync(room.RoomID, user.UserID, user.MatchState);
         }
 
         public override async Task HandleUserRequest(MultiplayerRoomUser user, MatchUserRequest request)
@@ -54,7 +54,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                     if (user.MatchState is TeamVersusUserState userState)
                         userState.TeamID = changeTeam.TeamID;
 
-                    await hub.NotifyMatchUserStateChanged(room, user);
+                    await eventNotifier.OnMatchUserStateChangedAsync(room.RoomID, user.UserID, user.MatchState);
                     break;
             }
         }

@@ -73,37 +73,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             return rooms.TryGetForUse(roomId);
         }
 
-        Task IServerMultiplayerRoomController.NotifyNewMatchEvent(ServerMultiplayerRoom room, MatchServerEvent e)
-        {
-            // TODO: maybe eliminate proxying later
-            return eventNotifier.OnNewMatchEventAsync(room.RoomID, e);
-        }
-
-        Task IServerMultiplayerRoomController.NotifyMatchRoomStateChanged(ServerMultiplayerRoom room)
-        {
-            // TODO: maybe eliminate proxying later
-            return eventNotifier.OnMatchRoomStateChangedAsync(room.RoomID, room.MatchState);
-        }
-
-        Task IServerMultiplayerRoomController.NotifyMatchUserStateChanged(ServerMultiplayerRoom room, MultiplayerRoomUser user)
-        {
-            // TODO: maybe eliminate proxying later
-            return eventNotifier.OnMatchUserStateChangedAsync(room.RoomID, user.UserID, user.MatchState);
-        }
-
-        Task IServerMultiplayerRoomController.NotifyPlaylistItemAdded(ServerMultiplayerRoom room, MultiplayerPlaylistItem item)
-        {
-            // TODO: maybe eliminate proxying later
-            return eventNotifier.OnPlaylistItemAddedAsync(room.RoomID, item);
-        }
-
-        Task IServerMultiplayerRoomController.NotifyPlaylistItemRemoved(ServerMultiplayerRoom room, long playlistItemId)
-        {
-            // TODO: maybe eliminate proxying later
-            return eventNotifier.OnPlaylistItemRemovedAsync(room.RoomID, playlistItemId);
-        }
-
-        async Task IServerMultiplayerRoomController.NotifyPlaylistItemChanged(ServerMultiplayerRoom room, MultiplayerPlaylistItem item, bool beatmapChanged)
+        async Task IServerMultiplayerRoomController.OnPlaylistItemChanged(ServerMultiplayerRoom room, MultiplayerPlaylistItem item, bool beatmapChanged)
         {
             if (item.ID == room.Settings.PlaylistItemId)
             {
@@ -114,7 +84,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             await eventNotifier.OnPlaylistItemChangedAsync(room.RoomID, item);
         }
 
-        async Task IServerMultiplayerRoomController.NotifySettingsChanged(ServerMultiplayerRoom room, bool playlistItemChanged)
+        async Task IServerMultiplayerRoomController.OnSettingsChanged(ServerMultiplayerRoom room, bool playlistItemChanged)
         {
             await ensureAllUsersValidStyle(room);
 
@@ -774,8 +744,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task IMultiplayerUserHubContext.TransferHost(HubCallerContext caller, int userId)
         {
-            long roomId;
-
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
@@ -788,7 +756,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         throw new InvalidOperationException("Attempted to operate on a null room");
 
                     log(room, caller, $"Transferring host from {room.Host?.UserID} to {userId}");
-                    roomId = room.RoomID;
 
                     ensureIsHost(caller, room);
 
@@ -804,8 +771,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         async Task IMultiplayerUserHubContext.KickUser(HubCallerContext caller, int userId)
         {
-            long roomId;
-
             using (var userUsage = await getOrCreateUserState(caller))
             {
                 Debug.Assert(userUsage.Item != null);
@@ -818,7 +783,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         throw new InvalidOperationException("Attempted to operate on a null room");
 
                     log(room, caller, $"Kicking user {userId}");
-                    roomId = room.RoomID;
 
                     if (userId == userUsage.Item?.UserId)
                         throw new InvalidStateException("Can't kick self");
@@ -1337,7 +1301,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
 
             await room.Controller.HandleSettingsChanged();
-            await ((IServerMultiplayerRoomController)this).NotifySettingsChanged(room, false);
+            await ((IServerMultiplayerRoomController)this).OnSettingsChanged(room, false);
 
             await ((IServerMultiplayerRoomController)this).UpdateRoomStateIfRequired(room);
         }
@@ -1405,7 +1369,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 if (usage.Item == null)
                     return;
 
-                foreach (var roomId in usage.Item.RefereedRoomIDs ?? [])
+                foreach (long roomId in usage.Item.RefereedRoomIDs)
                 {
                     using (var room = await rooms.GetForUse(roomId))
                         await ((IServerMultiplayerRoomController)this).RemoveUserFromRoom(caller.GetUserId(), usage.Item, room, false);
@@ -1512,7 +1476,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         throw new InvalidOperationException("The specified room does not exist");
 
                     log(room, caller, $"Transferring host from {room.Host?.UserID} to {userId}");
-                    roomId = room.RoomID;
 
                     ensureIsReferee(userUsage.Item, room);
 
@@ -1540,7 +1503,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         throw new InvalidOperationException("The specified room does not exist");
 
                     log(room, caller, $"Kicking user {userId}");
-                    roomId = room.RoomID;
 
                     if (userId == userUsage.Item.UserId)
                         throw new InvalidStateException("Can't kick self");

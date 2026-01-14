@@ -12,12 +12,14 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
     {
         private readonly ServerMultiplayerRoom room;
         private readonly IServerMultiplayerRoomController hub;
+        private readonly IMultiplayerRoomEventNotifier eventNotifier;
 
-        public HeadToHeadMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory)
-            : base(room, hub, dbFactory)
+        public HeadToHeadMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, IMultiplayerRoomEventNotifier eventNotifier)
+            : base(room, hub, dbFactory, eventNotifier)
         {
             this.room = room;
             this.hub = hub;
+            this.eventNotifier = eventNotifier;
         }
 
         public override async Task HandleUserJoined(MultiplayerRoomUser user)
@@ -29,7 +31,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                 // we don't need a state, but keep things simple by completely nulling the state.
                 // this allows the client to see a user state change and handle match type specifics based on that alone.
                 user.MatchState = null;
-                await hub.NotifyMatchUserStateChanged(room, user);
+                await eventNotifier.OnMatchUserStateChangedAsync(room.RoomID, user.UserID, user.MatchState);
             }
         }
 
