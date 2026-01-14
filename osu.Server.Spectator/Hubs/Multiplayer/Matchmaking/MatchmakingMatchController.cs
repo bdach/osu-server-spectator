@@ -254,11 +254,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
                 if (existingPick == playlistItemId)
                     return;
 
-                await hub.NotifyMatchmakingItemDeselected(room, user.UserID, existingPick);
+                await eventNotifier.OnPlayerBeatmapDeselectedAsync(room.RoomID, user.UserID, existingPick);
             }
 
             userPicks[user.UserID] = playlistItemId;
-            await hub.NotifyMatchmakingItemSelected(room, user.UserID, playlistItemId);
+            await eventNotifier.OnPlayerBeatmapSelectedAsync(room.RoomID, user.UserID, playlistItemId);
 
             await checkCanFastForwardBeatmapSelection();
         }
@@ -305,7 +305,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
         private async Task stageServerBeatmapFinalised(ServerMultiplayerRoom _)
         {
             foreach ((int userId, long playlistItemId) in userPicks)
-                await eventNotifier.OnPlayerBeatmapPickAsync(room.RoomID, userId, playlistItemId);
+                await eventNotifier.OnPlayerBeatmapFinalisedAsync(room.RoomID, userId, playlistItemId);
 
             long[] pickIds = userPicks.Values.ToArray();
 

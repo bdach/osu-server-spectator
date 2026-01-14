@@ -53,14 +53,12 @@ namespace osu.Server.Spectator.Hubs.Referee
                 ]
             });
             var created = await multiplayerHubContext.CreateRoom(Context, room);
-            await Groups.AddToGroupAsync(Context.ConnectionId, MultiplayerHub.GetGroupId(created.RoomID));
             return created.RoomID;
         }
 
         public async Task CloseRoom(long roomId)
         {
             await multiplayerHubContext.CloseRoom(Context, roomId);
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, MultiplayerHub.GetGroupId(roomId));
         }
 
         public async Task SetRoomName(long roomId, string roomName)

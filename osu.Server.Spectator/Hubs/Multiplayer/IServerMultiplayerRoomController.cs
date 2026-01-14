@@ -99,10 +99,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// </summary>
         Task UpdateRoomStateIfRequired(ServerMultiplayerRoom room, GameplayAbortReason? abortReason = null);
 
-        Task NotifyMatchmakingItemSelected(ServerMultiplayerRoom room, int userId, long playlistItemId);
-
-        Task NotifyMatchmakingItemDeselected(ServerMultiplayerRoom room, int userId, long playlistItemId);
-
         Task CheckVotesToSkipPassed(ServerMultiplayerRoom room);
 
         Task<MultiplayerRoom> JoinOrCreateRoom(long roomId, ItemUsage<ServerMultiplayerRoom> roomUsage, ItemUsage<MultiplayerClientState> userUsage, string password, bool isNewRoom);

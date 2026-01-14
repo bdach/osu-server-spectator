@@ -12,6 +12,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 {
     public interface IMultiplayerRoomEventNotifier
     {
+        Task SubscribePlayer(long roomId, string connectionId);
+        Task UnsubscribePlayer(long roomId, string connectionId);
+        Task SubscribeReferee(long roomId, string connectionId);
+        Task UnsubscribeReferee(long roomId, string connectionId);
+
         Task OnRoomCreatedAsync(long roomId, int userId);
         Task OnRoomStateChangedAsync(long roomId, MultiplayerRoomState state);
         Task OnPlayerJoinedAsync(long roomId, MultiplayerRoomUser user);

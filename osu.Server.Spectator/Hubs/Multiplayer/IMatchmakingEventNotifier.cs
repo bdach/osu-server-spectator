@@ -11,7 +11,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
     {
         Task OnRoomCreatedAsync(long roomId, MatchmakingRoomCreatedEventDetail details);
         Task OnPlayerJoinedMatchmakingAsync(long roomId, int userId);
-        Task OnPlayerBeatmapPickAsync(long roomId, int userId, long playlistItemId);
+        Task OnPlayerBeatmapSelectedAsync(long roomId, int userId, long playlistItemId);
+        Task OnPlayerBeatmapDeselectedAsync(long roomId, int userId, long playlistItemId);
+        Task OnPlayerBeatmapFinalisedAsync(long roomId, int userId, long playlistItemId);
         Task OnFinalBeatmapSelectedAsync(long roomId, long playlistItemId);
         Task OnNewMatchEventAsync(long roomId, MatchServerEvent e);
     }

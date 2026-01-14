@@ -19,7 +19,7 @@ namespace osu.Server.Spectator.Hubs.Referee
 
         public async Task NotifyRoomEvent(multiplayer_realtime_room_event ev)
         {
-            await context.Clients.Group(MultiplayerHub.GetGroupId(ev.room_id)).SendAsync("RoomEventLogged", ev);
+            await context.Clients.Group(MultiplayerEventNotifier.GetGroupId(ev.room_id)).SendAsync("RoomEventLogged", ev);
         }
     }
 }

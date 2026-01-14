@@ -111,12 +111,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task ChangeSettings(MultiplayerRoomSettings settings)
             => await HubContext.ChangeSettings(Context, settings);
 
-        /// <summary>
-        /// Get the group ID to be used for multiplayer messaging.
-        /// </summary>
-        /// <param name="roomId">The databased room ID.</param>
-        public static string GetGroupId(long roomId) => $"room:{roomId}";
-
         protected override async Task CleanUpState(MultiplayerClientState state)
         {
             await base.CleanUpState(state);

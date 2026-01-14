@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using osu.Game.Online;
 using osu.Game.Online.API;
-using osu.Game.Online.Matchmaking;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Multiplayer.Countdown;
 using osu.Game.Online.Rooms;
@@ -36,7 +35,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// </summary>
         private static readonly TimeSpan gameplay_load_timeout = TimeSpan.FromSeconds(30);
 
-        private readonly IHubContext<MultiplayerHub> context;
         private readonly EntityStore<ServerMultiplayerRoom> rooms;
         private readonly EntityStore<MultiplayerClientState> users;
         private readonly IDatabaseFactory databaseFactory;
@@ -46,7 +44,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         private readonly ChatFilters chatFilters;
 
         public MultiplayerHubContext(
-            IHubContext<MultiplayerHub> context,
             EntityStore<ServerMultiplayerRoom> rooms,
             EntityStore<MultiplayerClientState> users,
             ILoggerFactory loggerFactory,
@@ -55,7 +52,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             ISharedInterop sharedInterop,
             ChatFilters chatFilters)
         {
-            this.context = context;
             this.rooms = rooms;
             this.users = users;
             this.databaseFactory = databaseFactory;
@@ -336,16 +332,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
         }
 
-        async Task IServerMultiplayerRoomController.NotifyMatchmakingItemSelected(ServerMultiplayerRoom room, int userId, long playlistItemId)
-        {
-            await context.Clients.Group(MultiplayerHub.GetGroupId(room.RoomID)).SendAsync(nameof(IMatchmakingClient.MatchmakingItemSelected), userId, playlistItemId);
-        }
-
-        async Task IServerMultiplayerRoomController.NotifyMatchmakingItemDeselected(ServerMultiplayerRoom room, int userId, long playlistItemId)
-        {
-            await context.Clients.Group(MultiplayerHub.GetGroupId(room.RoomID)).SendAsync(nameof(IMatchmakingClient.MatchmakingItemDeselected), userId, playlistItemId);
-        }
-
         async Task IServerMultiplayerRoomController.CheckVotesToSkipPassed(ServerMultiplayerRoom room)
         {
             int countVotedUsers = room.Users.Count(u => u.State == MultiplayerUserState.Playing && u.VotedToSkipIntro);
@@ -444,10 +430,10 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                 ((IServerMultiplayerRoomController)this).Log(room, user, wasKick ? "User kicked" : "User left");
 
-                // intended to check whether the user here is an actual player in the room (for referees this will fail)
-                // it's a much of muchness, this guard could just not exist, but it feels better to have it
                 if (removedUserState.CurrentRoomID == roomId)
-                    await context.Groups.RemoveFromGroupAsync(removedUserState.ConnectionId, MultiplayerHub.GetGroupId(room.RoomID));
+                    await eventNotifier.UnsubscribePlayer(room.RoomID, removedUserState.ConnectionId);
+                if (removedUserState.RefereedRoomIDs.Contains(roomId.Value))
+                    await eventNotifier.UnsubscribeReferee(room.RoomID, removedUserState.ConnectionId);
 
                 if (user == null)
                     throw new InvalidStateException("User was not in the expected room.");
@@ -631,15 +617,14 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         {
                             case MultiplayerRoomUserRole.Player:
                                 userUsage.Item.SetRoom(roomId);
+                                await eventNotifier.SubscribePlayer(roomId, caller.ConnectionId);
                                 break;
 
                             case MultiplayerRoomUserRole.Referee:
                                 userUsage.Item.AddRefereedRoom(roomId);
+                                await eventNotifier.SubscribePlayer(roomId, caller.ConnectionId);
                                 break;
                         }
-
-                        if (role == MultiplayerRoomUserRole.Player)
-                            await context.Groups.AddToGroupAsync(caller.ConnectionId, MultiplayerHub.GetGroupId(roomId));
 
                         log(roomUsage.Item!, caller, "User joined");
                     }
