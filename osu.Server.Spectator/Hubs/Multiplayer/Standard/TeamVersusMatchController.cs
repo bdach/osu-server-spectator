@@ -17,8 +17,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
         private readonly TeamVersusRoomState state;
         private readonly IMultiplayerRoomEventNotifier eventNotifier;
 
-        public TeamVersusMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, IMultiplayerRoomEventNotifier eventNotifier)
-            : base(room, hub, dbFactory, eventNotifier)
+        public TeamVersusMatchController(ServerMultiplayerRoom room, IDatabaseFactory dbFactory, IMultiplayerRoomEventNotifier eventNotifier)
+            : base(room, dbFactory, eventNotifier)
         {
             this.room = room;
             this.eventNotifier = eventNotifier;

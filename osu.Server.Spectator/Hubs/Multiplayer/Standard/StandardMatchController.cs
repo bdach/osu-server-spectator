@@ -26,17 +26,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
         public MultiplayerPlaylistItem CurrentItem => room.Playlist[currentPlaylistItemIndex];
 
         private readonly ServerMultiplayerRoom room;
-        private readonly IServerMultiplayerRoomController hub;
         private readonly IDatabaseFactory dbFactory;
         private readonly IMultiplayerRoomEventNotifier eventNotifier;
 
         private QueueMode queueMode;
         private int currentPlaylistItemIndex;
 
-        protected StandardMatchController(ServerMultiplayerRoom room, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, IMultiplayerRoomEventNotifier eventNotifier)
+        protected StandardMatchController(ServerMultiplayerRoom room, IDatabaseFactory dbFactory, IMultiplayerRoomEventNotifier eventNotifier)
         {
             this.room = room;
-            this.hub = hub;
             this.dbFactory = dbFactory;
             this.eventNotifier = eventNotifier;
 
