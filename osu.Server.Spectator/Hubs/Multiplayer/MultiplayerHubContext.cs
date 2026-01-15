@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
@@ -27,31 +28,27 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
     public class MultiplayerHubContext
         : IServerMultiplayerRoomController, IMultiplayerUserHubContext, IMultiplayerRefereeHubContext
     {
+        private readonly IServiceProvider serviceProvider;
+
         private readonly EntityStore<ServerMultiplayerRoom> rooms;
         private readonly EntityStore<MultiplayerClientState> users;
         private readonly IDatabaseFactory databaseFactory;
         private readonly ILogger logger;
         private readonly MultiplayerEventNotifier eventNotifier;
         private readonly ISharedInterop sharedInterop;
-        private readonly ChatFilters chatFilters;
 
         public MultiplayerHubContext(
-            EntityStore<ServerMultiplayerRoom> rooms,
-            EntityStore<MultiplayerClientState> users,
-            ILoggerFactory loggerFactory,
-            IDatabaseFactory databaseFactory,
-            MultiplayerEventNotifier eventNotifier,
-            ISharedInterop sharedInterop,
-            ChatFilters chatFilters)
+            IServiceProvider serviceProvider)
         {
-            this.rooms = rooms;
-            this.users = users;
-            this.databaseFactory = databaseFactory;
-            this.eventNotifier = eventNotifier;
-            this.sharedInterop = sharedInterop;
-            this.chatFilters = chatFilters;
+            this.serviceProvider = serviceProvider;
 
-            logger = loggerFactory.CreateLogger(nameof(MultiplayerHub).Replace("Hub", string.Empty));
+            rooms = serviceProvider.GetRequiredService<EntityStore<ServerMultiplayerRoom>>();
+            users = serviceProvider.GetRequiredService<EntityStore<MultiplayerClientState>>();
+            databaseFactory = serviceProvider.GetRequiredService<IDatabaseFactory>();
+            eventNotifier = serviceProvider.GetRequiredService<MultiplayerEventNotifier>();
+            sharedInterop = serviceProvider.GetRequiredService<ISharedInterop>();
+
+            logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MultiplayerHub).Replace("Hub", string.Empty));
         }
 
         #region IServerMultiplayerRoomController
@@ -76,14 +73,14 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
             try
             {
-                room = roomUsage.Item ??= await ServerMultiplayerRoom.InitialiseAsync(roomId, this, databaseFactory, eventNotifier, sharedInterop, chatFilters);
+                room = roomUsage.Item ??= await ServerMultiplayerRoom.InitialiseAsync(roomId, serviceProvider);
 
                 // this is a sanity check to keep *rooms* in a good state.
                 // in theory the connection clean-up code should handle this correctly.
                 if (room.Users.Any(u => u.UserID == roomUser.UserID))
                     throw new InvalidOperationException($"User {roomUser.UserID} attempted to join room {room.RoomID} they are already present in.");
 
-                if (!await room.Controller.UserCanJoin(roomUser.UserID))
+                if (!await room.UserCanJoin(roomUser.UserID))
                     throw new InvalidStateException("Not eligible to join this room.");
 
                 if (!string.IsNullOrEmpty(room.Settings.Password))
@@ -558,7 +555,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                             break;
 
                         default:
-                            await room.Controller.HandleUserRequest(user, request);
+                            await room.HandleUserRequest(user, request);
                             break;
                     }
                 }
@@ -1061,11 +1058,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     if (user == null)
                         throw new InvalidOperationException("Local user was not found in the expected room");
 
-                    var currentItem = room.Controller.CurrentItem.Clone();
+                    var currentItem = room.CurrentPlaylistItem.Clone();
                     changeFunc.Invoke(currentItem);
 
                     log(room, $"Editing playlist item {currentItem.ID} for beatmap {currentItem.BeatmapID}");
-                    await room.Controller.EditPlaylistItem(currentItem, user, userUsage.Item);
+                    await room.EditPlaylistItem(user, userUsage.Item, currentItem);
                 }
             }
         }

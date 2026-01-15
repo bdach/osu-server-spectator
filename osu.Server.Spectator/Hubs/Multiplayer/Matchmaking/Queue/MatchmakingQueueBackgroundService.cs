@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -43,6 +44,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
 
         private readonly ConcurrentDictionary<int, MatchmakingQueue> poolQueues = new ConcurrentDictionary<int, MatchmakingQueue>();
 
+        private readonly IServiceProvider serviceProvider;
         private readonly IHubContext<MultiplayerHub> hub;
         private readonly ISharedInterop sharedInterop;
         private readonly IDatabaseFactory databaseFactory;
@@ -55,18 +57,19 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         private DateTimeOffset lastLobbyUpdateTime = DateTimeOffset.UnixEpoch;
         private DateTimeOffset lastQueueRefreshTime = DateTimeOffset.UnixEpoch;
 
-        public MatchmakingQueueBackgroundService(IHubContext<MultiplayerHub> hub, ISharedInterop sharedInterop, IDatabaseFactory databaseFactory, ILoggerFactory loggerFactory,
-                                                 EntityStore<ServerMultiplayerRoom> rooms, IServerMultiplayerRoomController hubContext, IMemoryCache memoryCache, MultiplayerEventNotifier eventLogger)
+        public MatchmakingQueueBackgroundService(IServiceProvider serviceProvider)
         {
-            this.hub = hub;
-            this.sharedInterop = sharedInterop;
-            this.databaseFactory = databaseFactory;
-            this.rooms = rooms;
-            this.hubContext = hubContext;
-            this.memoryCache = memoryCache;
-            this.eventLogger = eventLogger;
+            this.serviceProvider = serviceProvider;
 
-            logger = loggerFactory.CreateLogger(nameof(MatchmakingQueueBackgroundService));
+            hub = serviceProvider.GetRequiredService<IHubContext<MultiplayerHub>>();
+            sharedInterop = serviceProvider.GetRequiredService<ISharedInterop>();
+            databaseFactory = serviceProvider.GetRequiredService<IDatabaseFactory>();
+            rooms = serviceProvider.GetRequiredService<EntityStore<ServerMultiplayerRoom>>();
+            hubContext = serviceProvider.GetRequiredService<IServerMultiplayerRoomController>();
+            memoryCache = serviceProvider.GetRequiredService<IMemoryCache>();
+            eventLogger = serviceProvider.GetRequiredService<MultiplayerEventNotifier>();
+
+            logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MatchmakingQueueBackgroundService));
         }
 
         public bool IsInQueue(MultiplayerClientState state)
@@ -298,7 +301,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
 
                 // Initialise the room and users
                 using (var roomUsage = await rooms.GetForUse(roomId, true))
-                    roomUsage.Item = await InitialiseRoomAsync(roomId, hubContext, databaseFactory, eventLogger, group.Users.Select(u => u.UserId).ToArray(), bundle.Queue.Pool.id);
+                    roomUsage.Item = await InitialiseRoomAsync(roomId, serviceProvider, group.Users.Select(u => u.UserId).ToArray(), bundle.Queue.Pool.id);
 
                 await hub.Clients.Group(group.Identifier).SendAsync(nameof(IMatchmakingClient.MatchmakingRoomReady), roomId, password);
 
@@ -322,21 +325,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.Queue
         /// <param name="eligibleUserIds">The users who are allowed to join the room.</param>
         /// <param name="poolId">The pool ID.</param>
         /// <exception cref="InvalidOperationException">If the room is not a matchmaking room in the database.</exception>
-        public static async Task<ServerMultiplayerRoom> InitialiseRoomAsync(long roomId, IServerMultiplayerRoomController hub, IDatabaseFactory dbFactory, MultiplayerEventNotifier eventLogger,
-                                                                            int[] eligibleUserIds, uint poolId)
+        public static async Task<ServerMultiplayerRoom> InitialiseRoomAsync(long roomId, IServiceProvider serviceProvider, int[] eligibleUserIds, uint poolId)
         {
-            ServerMultiplayerRoom room = await ServerMultiplayerRoom.InitialiseAsync(roomId, hub, dbFactory, eventLogger);
+            ServerMultiplayerRoom room = await ServerMultiplayerRoom.InitialiseMatchmakingAsync(roomId, poolId, serviceProvider);
 
             if (room.MatchState is not MatchmakingRoomState matchmakingState)
                 throw new InvalidOperationException("Failed to initialise the matchmaking room (invalid state).");
 
             foreach (int user in eligibleUserIds)
                 matchmakingState.Users.GetOrAdd(user);
-
-            if (room.Controller is not MatchmakingMatchController matchmakingController)
-                throw new InvalidOperationException("Failed to initialise the matchmaking room (invalid controller).");
-
-            matchmakingController.PoolId = poolId;
 
             return room;
         }

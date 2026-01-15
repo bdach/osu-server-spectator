@@ -4,10 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
@@ -30,34 +30,25 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// </summary>
         private static readonly TimeSpan gameplay_load_timeout = TimeSpan.FromSeconds(30);
 
-        public IMatchController Controller
-        {
-            get => matchController ?? throw new InvalidOperationException("Room not initialised.");
-            private set => matchController = value;
-        }
-
         private readonly IServerMultiplayerRoomController hub;
         private readonly IDatabaseFactory dbFactory;
         private readonly MultiplayerEventNotifier eventNotifier;
         private readonly ISharedInterop sharedInterop;
         private readonly ChatFilters chatFilters;
-        private IMatchController? matchController;
+
+        private IMatchController controller = null!;
 
         private readonly HashSet<int> refereeIds = [];
 
         private ServerMultiplayerRoom(long roomId,
-                                      IServerMultiplayerRoomController hub,
-                                      IDatabaseFactory dbFactory,
-                                      MultiplayerEventNotifier eventNotifier,
-                                      ISharedInterop sharedInterop,
-                                      ChatFilters chatFilters)
+                                      IServiceProvider serviceProvider)
             : base(roomId)
         {
-            this.hub = hub;
-            this.dbFactory = dbFactory;
-            this.eventNotifier = eventNotifier;
-            this.sharedInterop = sharedInterop;
-            this.chatFilters = chatFilters;
+            hub = serviceProvider.GetRequiredService<IServerMultiplayerRoomController>();
+            dbFactory = serviceProvider.GetRequiredService<IDatabaseFactory>();
+            eventNotifier = serviceProvider.GetRequiredService<MultiplayerEventNotifier>();
+            sharedInterop = serviceProvider.GetRequiredService<ISharedInterop>();
+            chatFilters = serviceProvider.GetRequiredService<ChatFilters>();
         }
 
         /// <summary>
@@ -66,28 +57,21 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// This will also mark the room as active, indicating that this server is now in control of the room's lifetime.
         /// </summary>
         /// <param name="roomId">The room identifier.</param>
-        /// <param name="hub">The multiplayer hub context.</param>
-        /// <param name="dbFactory">The database factory.</param>
-        /// <param name="eventLogger">The event logger.</param>
         /// <exception cref="InvalidOperationException">If the room does not exist in the database.</exception>
         /// <exception cref="InvalidStateException">If the match has already ended.</exception>
         public static async Task<ServerMultiplayerRoom> InitialiseAsync(
             long roomId,
-            IServerMultiplayerRoomController hub,
-            IDatabaseFactory dbFactory,
-            MultiplayerEventNotifier eventLogger,
-            ISharedInterop sharedInterop,
-            ChatFilters chatFilters)
+            IServiceProvider serviceProvider)
         {
-            ServerMultiplayerRoom room = new ServerMultiplayerRoom(roomId, hub, dbFactory, eventLogger, sharedInterop, chatFilters);
+            ServerMultiplayerRoom room = new ServerMultiplayerRoom(roomId, serviceProvider);
 
             // TODO: this call should be transactional, and mark the room as managed by this server instance.
             // This will allow for other instances to know not to reinitialise the room if the host arrives there.
             // Alternatively, we can move lobby retrieval away from osu-web and not require this in the first place.
             // Needs further discussion and consideration either way.
-            using (var db = dbFactory.GetInstance())
+            using (var db = room.dbFactory.GetInstance())
             {
-                hub.Log(room, null, $"Retrieving room {roomId} from database");
+                //hub.Log(room, null, $"Retrieving room {roomId} from database");
                 var databaseRoom = await db.GetRealtimeRoomAsync(roomId);
 
                 if (databaseRoom == null)
@@ -112,10 +96,24 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                 await room.ChangeMatchType(room.Settings.MatchType);
 
-                hub.Log(room, null, "Marking room active");
+                //hub.Log(room, null, "Marking room active");
                 await db.MarkRoomActiveAsync(room);
             }
 
+            return room;
+        }
+
+        public static async Task<ServerMultiplayerRoom> InitialiseMatchmakingAsync(
+            long roomId,
+            uint poolId,
+            IServiceProvider serviceProvider)
+        {
+            var room = await InitialiseAsync(roomId, serviceProvider);
+
+            if (room.controller is not MatchmakingMatchController matchmakingController)
+                throw new InvalidOperationException("Failed to initialise the matchmaking room (invalid controller).");
+
+            matchmakingController.PoolId = poolId;
             return room;
         }
 
@@ -149,7 +147,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     break;
             }
 
-            await Controller.HandleUserJoined(user);
+            await controller.HandleUserJoined(user);
         }
 
         /// <summary>
@@ -192,7 +190,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
 
             await checkVotesToSkipPassed();
-            await Controller.HandleUserLeft(user);
+            await controller.HandleUserLeft(user);
         }
 
         public async Task SetNewHost(MultiplayerRoomUser newHost)
@@ -259,7 +257,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     if (oldState != MultiplayerUserState.Idle)
                         throw new InvalidStateChangeException(oldState, newState);
 
-                    if (Controller.CurrentItem.Expired)
+                    if (controller.CurrentItem.Expired)
                         throw new InvalidStateException("Cannot ready up while all items have been played.");
 
                     break;
@@ -311,7 +309,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
             user.State = state;
             await eventNotifier.OnUserStateChangedAsync(RoomID, user.UserID, user.State);
-            await Controller.HandleUserStateChanged(user);
+            await controller.HandleUserStateChanged(user);
         }
 
         public async Task UpdateRoomStateIfRequired(GameplayAbortReason? abortReason = null)
@@ -322,7 +320,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 case MultiplayerRoomState.Open:
                     if (Settings.AutoStartEnabled)
                     {
-                        bool shouldHaveCountdown = !Controller.CurrentItem.Expired && Users.Any(u => u.State == MultiplayerUserState.Ready);
+                        bool shouldHaveCountdown = !controller.CurrentItem.Expired && Users.Any(u => u.State == MultiplayerUserState.Ready);
 
                         if (shouldHaveCountdown && !ActiveCountdowns.Any(c => c is MatchStartCountdown))
                             await StartCountdown(new MatchStartCountdown { TimeRemaining = Settings.AutoStartDuration }, StartMatch);
@@ -358,7 +356,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         else
                             await eventNotifier.OnGameAbortedAsync(RoomID, CurrentPlaylistItem.ID, abortReason);
 
-                        await Controller.HandleGameplayCompleted();
+                        await controller.HandleGameplayCompleted();
                     }
 
                     break;
@@ -398,12 +396,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
             if (beatmapId != null || rulesetId != null)
             {
-                if (!Controller.CurrentItem.Freestyle)
+                if (!controller.CurrentItem.Freestyle)
                     throw new InvalidStateException("Current item does not allow free user styles.");
 
                 using (var db = dbFactory.GetInstance())
                 {
-                    database_beatmap itemBeatmap = (await db.GetBeatmapAsync(Controller.CurrentItem.BeatmapID))!;
+                    database_beatmap itemBeatmap = (await db.GetBeatmapAsync(controller.CurrentItem.BeatmapID))!;
                     database_beatmap? userBeatmap = beatmapId == null ? itemBeatmap : await db.GetBeatmapAsync(beatmapId.Value);
 
                     if (userBeatmap == null)
@@ -420,7 +418,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             user.BeatmapId = beatmapId;
             user.RulesetId = rulesetId;
 
-            if (!Controller.CurrentItem.ValidateUserMods(user, user.Mods, out var validMods))
+            if (!controller.CurrentItem.ValidateUserMods(user, user.Mods, out var validMods))
             {
                 user.Mods = validMods.ToArray();
                 await eventNotifier.OnUserModsChangedAsync(RoomID, user.UserID, user.Mods);
@@ -433,7 +431,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         {
             var newModList = newMods.ToList();
 
-            if (!Controller.CurrentItem.ValidateUserMods(user, newModList, out var validMods))
+            if (!controller.CurrentItem.ValidateUserMods(user, newModList, out var validMods))
                 throw new InvalidStateException($"Incompatible mods were selected: {string.Join(',', newModList.Except(validMods).Select(m => m.Acronym))}");
 
             if (user.Mods.SequenceEqual(newModList))
@@ -444,7 +442,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             await eventNotifier.OnUserModsChangedAsync(RoomID, user.UserID, newModList);
         }
 
-        [MemberNotNull(nameof(Controller))]
         public Task ChangeMatchType(MatchType type)
         {
             switch (type)
@@ -460,15 +457,14 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             }
         }
 
-        [MemberNotNull(nameof(Controller))]
         public async Task ChangeMatchType(IMatchController controller)
         {
-            Controller = controller;
+            this.controller = controller;
 
-            await Controller.Initialise();
+            await this.controller.Initialise();
 
             foreach (var u in Users)
-                await Controller.HandleUserJoined(u);
+                await this.controller.HandleUserJoined(u);
         }
 
         public static async Task StartMatch(ServerMultiplayerRoom room)
@@ -476,13 +472,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             if (room.State != MultiplayerRoomState.Open)
                 throw new InvalidStateException("Can't start match when already in a running state.");
 
-            if (room.Controller.CurrentItem.Expired)
+            if (room.controller.CurrentItem.Expired)
                 throw new InvalidStateException("Cannot start an expired playlist item.");
 
             // If no users are ready, skip the current item in the queue.
             if (room.Users.All(u => u.State != MultiplayerUserState.Ready))
             {
-                await room.Controller.HandleGameplayCompleted();
+                await room.controller.HandleGameplayCompleted();
                 return;
             }
 
@@ -500,7 +496,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
             await room.changeRoomState(MultiplayerRoomState.WaitingForLoad);
 
-            await room.eventNotifier.OnGameStartedAsync(room.RoomID, room.Controller.CurrentItem.ID, room.Controller.GetMatchDetails());
+            await room.eventNotifier.OnGameStartedAsync(room.RoomID, room.controller.CurrentItem.ID, room.controller.GetMatchDetails());
 
             await room.StartCountdown(new ForceGameplayStartCountdown { TimeRemaining = gameplay_load_timeout }, startOrStopGameplay);
         }
@@ -546,7 +542,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             {
                 await room.changeRoomState(MultiplayerRoomState.Open);
                 await room.eventNotifier.OnGameAbortedAsync(room.RoomID, room.CurrentPlaylistItem.ID, null);
-                await room.Controller.HandleGameplayCompleted();
+                await room.controller.HandleGameplayCompleted();
             }
         }
 
@@ -601,17 +597,16 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         public async Task AddPlaylistItem(MultiplayerRoomUser user, MultiplayerPlaylistItem item)
         {
-            // TODO: should these add/edit/remove methods even be public? maybe we can privatise `Controller`?
-            await Controller.AddPlaylistItem(item, user);
+            await controller.AddPlaylistItem(item, user);
             await UpdateRoomStateIfRequired();
         }
 
         public Task EditPlaylistItem(MultiplayerRoomUser user, MultiplayerClientState clientState, MultiplayerPlaylistItem item)
-            => Controller.EditPlaylistItem(item, user, clientState);
+            => controller.EditPlaylistItem(item, user, clientState);
 
         public async Task RemovePlaylistItem(MultiplayerRoomUser user, long playlistItemId)
         {
-            await Controller.RemovePlaylistItem(playlistItemId, user);
+            await controller.RemovePlaylistItem(playlistItemId, user);
             await UpdateRoomStateIfRequired();
         }
 
@@ -660,7 +655,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 //log(room, $"Switching room ruleset to {room.Controller}");
             }
 
-            await Controller.HandleSettingsChanged();
+            await controller.HandleSettingsChanged();
             await OnSettingsChanged(false);
 
             await UpdateRoomStateIfRequired();
@@ -689,7 +684,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         private async Task ensureAllUsersValidStyle()
         {
-            if (!Controller.CurrentItem.Freestyle)
+            if (!controller.CurrentItem.Freestyle)
             {
                 // Reset entire style when freestyle is disabled.
                 foreach (var user in Users)
@@ -702,7 +697,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                 using (var db = dbFactory.GetInstance())
                 {
-                    itemBeatmap = (await db.GetBeatmapAsync(Controller.CurrentItem.BeatmapID))!;
+                    itemBeatmap = (await db.GetBeatmapAsync(controller.CurrentItem.BeatmapID))!;
                     validDifficulties = await db.GetBeatmapsAsync(itemBeatmap.beatmapset_id);
                 }
 
@@ -729,7 +724,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
             foreach (var user in Users)
             {
-                if (!Controller.CurrentItem.ValidateUserMods(user, user.Mods, out var validMods))
+                if (!controller.CurrentItem.ValidateUserMods(user, user.Mods, out var validMods))
                     await ChangeUserMods(user, validMods);
             }
         }
@@ -928,6 +923,19 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 SkipSource.Dispose();
             }
         }
+
+        #endregion
+
+        #region Controller proxying
+
+        public Task<bool> UserCanJoin(int userId) => controller.UserCanJoin(userId);
+        public Task HandleUserRequest(MultiplayerRoomUser user, MatchUserRequest request) => controller.HandleUserRequest(user, request);
+
+        public new MultiplayerPlaylistItem CurrentPlaylistItem => controller.CurrentItem;
+
+        // TODO: dodge but it is what it is
+        public Task ToggleSelectionAsync(MultiplayerRoomUser user, long playlistItemId) => ((MatchmakingMatchController)controller).ToggleSelectionAsync(user, playlistItemId);
+        public void SkipToNextStage() => ((MatchmakingMatchController)controller).SkipToNextStage(out _);
 
         #endregion
     }

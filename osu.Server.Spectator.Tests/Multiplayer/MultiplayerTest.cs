@@ -163,9 +163,7 @@ namespace osu.Server.Spectator.Tests.Multiplayer
                 EventLogger,
                 LegacyIO.Object);
 
-            MatchmakingBackgroundService = new MatchmakingQueueBackgroundService(
-                hubContext.Object,
-                LegacyIO.Object,
+            MatchmakingBackgroundService = new MatchmakingQueueBackgroundService(LegacyIO.Object,
                 DatabaseFactory.Object,
                 loggerFactoryMock.Object,
                 Rooms,
