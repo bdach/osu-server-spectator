@@ -33,5 +33,18 @@ namespace osu.Server.Spectator.Hubs.Referee
         /// A user has been kicked from a refereed room.
         /// </summary>
         Task UserKicked(UserKickedEvent info);
+
+        Task RoomSettingsChanged(RoomSettingsChangedEvent info);
+        Task PlaylistItemChanged(PlaylistItemChangedEvent info);
+        Task UserStatusChanged(UserStatusChangedEvent info);
+        Task UserModsChanged(UserModsChangedEvent info);
+        Task UserStyleChanged(UserStyleChangedEvent info);
+        Task UserTeamChanged(UserTeamChangedEvent info);
+
+        Task CountdownStarted(CountdownStartedEvent info);
+        Task CountdownStopped(CountdownStoppedEvent info);
+        Task MatchStarted(MatchStartedEvent info);
+        Task MatchAborted(MatchAbortedEvent info);
+        Task MatchCompleted(MatchCompletedEvent info);
     }
 }

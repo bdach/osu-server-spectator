@@ -5,6 +5,7 @@ using System;
 using System.Threading.Tasks;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
+using osu.Server.Spectator.Hubs.Referee.Models.Requests;
 using osu.Server.Spectator.Hubs.Referee.Models.Responses;
 
 namespace osu.Server.Spectator.Hubs.Referee
@@ -67,5 +68,10 @@ namespace osu.Server.Spectator.Hubs.Referee
         /// Kicks the player with the given <paramref name="userId"/> from the given <paramref name="roomId"/>.
         /// </summary>
         Task KickPlayer(long roomId, int userId);
+
+        Task ChangeRoomSettings(long roomId, ChangeRoomSettingsRequest request);
+        Task EditCurrentPlaylistItem(long roomId, EditCurrentPlaylistItemRequest request);
+        Task MoveUser(long roomId, MoveUserRequest request);
+        Task StartGameplay(long roomId, StartGameplayRequest request);
     }
 }

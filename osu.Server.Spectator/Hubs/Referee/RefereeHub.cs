@@ -10,12 +10,15 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Multiplayer;
+using osu.Game.Online.Multiplayer.MatchTypes.TeamVersus;
 using osu.Game.Online.Rooms;
 using osu.Server.Spectator.Authentication;
 using osu.Server.Spectator.Database;
+using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Entities;
 using osu.Server.Spectator.Extensions;
 using osu.Server.Spectator.Hubs.Multiplayer;
+using osu.Server.Spectator.Hubs.Referee.Models.Requests;
 using osu.Server.Spectator.Hubs.Referee.Models.Responses;
 using osu.Server.Spectator.Services;
 using MatchType = osu.Game.Online.Rooms.MatchType;
@@ -32,6 +35,7 @@ namespace osu.Server.Spectator.Hubs.Referee
         private readonly MultiplayerEventDispatcher eventDispatcher;
         private readonly EntityStore<RefereeClientState> refereeStates;
         private readonly EntityStore<MultiplayerClientState> playerStates;
+        private readonly ChatFilters chatFilters;
 
         public RefereeHub(
             IDatabaseFactory databaseFactory,
@@ -40,7 +44,8 @@ namespace osu.Server.Spectator.Hubs.Referee
             IMultiplayerRoomController roomController,
             MultiplayerEventDispatcher eventDispatcher,
             EntityStore<RefereeClientState> refereeStates,
-            EntityStore<MultiplayerClientState> playerStates)
+            EntityStore<MultiplayerClientState> playerStates,
+            ChatFilters chatFilters)
         {
             this.databaseFactory = databaseFactory;
             logger = loggerFactory.CreateLogger<RefereeHub>();
@@ -49,6 +54,7 @@ namespace osu.Server.Spectator.Hubs.Referee
             this.eventDispatcher = eventDispatcher;
             this.refereeStates = refereeStates;
             this.playerStates = playerStates;
+            this.chatFilters = chatFilters;
         }
 
         public override async Task OnConnectedAsync()
@@ -254,6 +260,151 @@ namespace osu.Server.Spectator.Hubs.Referee
                         Debug.Assert(targetUserUsage.Item != null);
                         await roomController.KickUserFromRoom(targetUserUsage.Item, roomUsage, userUsage.Item.UserId);
                     }
+                }
+            }
+        }
+
+        public async Task ChangeRoomSettings(long roomId, ChangeRoomSettingsRequest request)
+        {
+            using (var userUsage = await refereeStates.GetForUse(Context.GetUserId()))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                ensureIsReferee(roomId, userUsage);
+
+                using (var roomUsage = await roomController.GetRoom(roomId))
+                {
+                    if (roomUsage.Item == null)
+                        ThrowHelper.ThrowRoomDoesNotExist();
+
+                    var oldSettings = roomUsage.Item.Settings;
+                    var newSettings = new MultiplayerRoomSettings
+                    {
+                        Name = await chatFilters.FilterAsync(request.Name ?? oldSettings.Name),
+                        PlaylistItemId = oldSettings.PlaylistItemId,
+                        Password = request.Password ?? oldSettings.Password,
+                        MatchType = request.MatchType != null ? (MatchType)request.MatchType : oldSettings.MatchType,
+                        QueueMode = oldSettings.QueueMode,
+                        AutoStartDuration = oldSettings.AutoStartDuration,
+                        AutoSkip = oldSettings.AutoSkip,
+                    };
+
+                    await roomUsage.Item.ChangeRoomSettings(newSettings);
+                }
+            }
+        }
+
+        public async Task EditCurrentPlaylistItem(long roomId, EditCurrentPlaylistItemRequest request)
+        {
+            using (var userUsage = await refereeStates.GetForUse(Context.GetUserId()))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                ensureIsReferee(roomId, userUsage);
+
+                using (var roomUsage = await roomController.GetRoom(roomId))
+                {
+                    if (roomUsage.Item == null)
+                        ThrowHelper.ThrowRoomDoesNotExist();
+
+                    var oldPlaylistItem = roomUsage.Item.CurrentPlaylistItem;
+
+                    int newBeatmapId = oldPlaylistItem.BeatmapID;
+                    string newBeatmapChecksum = oldPlaylistItem.BeatmapChecksum;
+                    database_beatmap? newBeatmap = null;
+
+                    if (request.BeatmapId != null)
+                    {
+                        using var db = databaseFactory.GetInstance();
+                        newBeatmap = await db.GetBeatmapAsync(request.BeatmapId.Value);
+
+                        if (newBeatmap == null)
+                            ThrowHelper.ThrowBeatmapDoesNotExist();
+
+                        newBeatmapId = newBeatmap.beatmap_id;
+                        newBeatmapChecksum = newBeatmap.checksum!;
+                    }
+
+                    int oldRuleset = oldPlaylistItem.RulesetID;
+                    int newRuleset = request.RulesetId ?? oldRuleset;
+
+                    var newRequiredMods = oldRuleset != newRuleset && request.RequiredMods == null
+                        ? []
+                        : (request.RequiredMods ?? oldPlaylistItem.RequiredMods);
+
+                    var newAllowedMods = oldRuleset != newRuleset && request.AllowedMods == null
+                        ? []
+                        : (request.AllowedMods ?? oldPlaylistItem.AllowedMods);
+
+                    var newPlaylistItem = new MultiplayerPlaylistItem
+                    {
+                        ID = oldPlaylistItem.ID,
+                        OwnerID = oldPlaylistItem.OwnerID,
+                        BeatmapID = newBeatmapId,
+                        BeatmapChecksum = newBeatmapChecksum,
+                        RulesetID = newRuleset,
+                        RequiredMods = newRequiredMods,
+                        AllowedMods = newAllowedMods,
+                        Expired = oldPlaylistItem.Expired,
+                        PlaylistOrder = oldPlaylistItem.PlaylistOrder,
+                        PlayedAt = oldPlaylistItem.PlayedAt,
+                        // TODO: VEEEEERY dodge but maybe good enough for now
+                        StarRating = newBeatmap?.difficultyrating ?? oldPlaylistItem.StarRating,
+                        Freestyle = request.Freestyle ?? oldPlaylistItem.Freestyle,
+                    };
+
+                    await roomUsage.Item.EditPlaylistItem(Context.GetUserId(), newPlaylistItem);
+                }
+            }
+        }
+
+        public async Task MoveUser(long roomId, MoveUserRequest request)
+        {
+            using (var userUsage = await refereeStates.GetForUse(Context.GetUserId()))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                ensureIsReferee(roomId, userUsage);
+
+                using (var roomUsage = await roomController.GetRoom(roomId))
+                {
+                    if (roomUsage.Item == null)
+                        ThrowHelper.ThrowRoomDoesNotExist();
+
+                    if (roomUsage.Item.Settings.MatchType != MatchType.TeamVersus)
+                        ThrowHelper.ThrowIncorrectMatchType();
+
+                    var targetUser = roomUsage.Item.Users.SingleOrDefault(u => u.UserID == request.UserId);
+                    if (targetUser == null)
+                        ThrowHelper.ThrowUserNotInRoom();
+
+                    var req = new ChangeTeamRequest
+                    {
+                        TeamID = (int)request.Team
+                    };
+
+                    await roomUsage.Item.HandleUserRequest(targetUser, req);
+                }
+            }
+        }
+
+        public async Task StartGameplay(long roomId, StartGameplayRequest request)
+        {
+            using (var userUsage = await refereeStates.GetForUse(Context.GetUserId()))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                ensureIsReferee(roomId, userUsage);
+
+                using (var roomUsage = await roomController.GetRoom(roomId))
+                {
+                    if (roomUsage.Item == null)
+                        ThrowHelper.ThrowRoomDoesNotExist();
+
+                    if (request.Countdown == null)
+                        await ServerMultiplayerRoom.StartMatch(roomUsage.Item);
+                    else
+                        await roomUsage.Item.StartMatchCountdown(TimeSpan.FromSeconds(request.Countdown.Value));
                 }
             }
         }

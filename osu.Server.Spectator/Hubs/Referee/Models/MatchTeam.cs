@@ -2,15 +2,16 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Text.Json.Serialization;
+using osu.Server.Spectator.Database.Models;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models
 {
-    public enum MatchType
+    public enum MatchTeam
     {
-        [JsonStringEnumMemberName("head_to_head")]
-        HeadToHead = Game.Online.Rooms.MatchType.HeadToHead,
+        [JsonStringEnumMemberName("blue")]
+        Blue = room_team.blue,
 
-        [JsonStringEnumMemberName("team_versus")]
-        TeamVersus = Game.Online.Rooms.MatchType.TeamVersus,
+        [JsonStringEnumMemberName("red")]
+        Red = room_team.red,
     }
 }

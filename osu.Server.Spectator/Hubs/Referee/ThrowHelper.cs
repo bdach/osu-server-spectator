@@ -26,5 +26,13 @@ namespace osu.Server.Spectator.Hubs.Referee
         [DoesNotReturn]
         public static void ThrowUserNotInRoom()
             => throw new RefereeHubException(5, "The specified user is not in the room.");
+
+        [DoesNotReturn]
+        public static void ThrowBeatmapDoesNotExist()
+            => throw new RefereeHubException(6, "The specified beatmap does not exist.");
+
+        [DoesNotReturn]
+        public static void ThrowIncorrectMatchType()
+            => throw new RefereeHubException(7, "Cannot perform this operation with the current match type.");
     }
 }

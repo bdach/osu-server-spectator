@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -11,12 +12,15 @@ using osu.Game.Online.API;
 using osu.Game.Online.Matchmaking;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Multiplayer.MatchTypes.RankedPlay;
+using osu.Game.Online.Multiplayer.MatchTypes.TeamVersus;
 using osu.Game.Online.RankedPlay;
 using osu.Game.Online.Rooms;
 using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Database.Models;
 using osu.Server.Spectator.Hubs.Referee;
+using osu.Server.Spectator.Hubs.Referee.Models;
 using osu.Server.Spectator.Hubs.Referee.Models.Events;
+using MatchType = osu.Server.Spectator.Hubs.Referee.Models.MatchType;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer
 {
@@ -140,6 +144,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostRoomSettingsChangedAsync(long roomId, MultiplayerRoomSettings newSettings)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.SettingsChanged), newSettings);
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.RoomSettingsChanged), new RoomSettingsChangedEvent(roomId, newSettings));
         }
 
         /// <summary>
@@ -165,6 +170,17 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostMatchEventAsync(long roomId, MatchServerEvent e)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.MatchEvent), e);
+
+            switch (e)
+            {
+                case Game.Online.Multiplayer.Countdown.CountdownStartedEvent countdownStarted:
+                    await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.CountdownStarted), new CountdownStartedEvent(roomId, countdownStarted));
+                    break;
+
+                case Game.Online.Multiplayer.Countdown.CountdownStoppedEvent countdownStopped:
+                    await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.CountdownStopped), new CountdownStoppedEvent(roomId, countdownStopped));
+                    break;
+            }
         }
 
         /// <summary>
@@ -271,6 +287,16 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostUserStateChangedAsync(long roomId, int userId, MultiplayerUserState newUserState)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.UserStateChanged), userId, newUserState);
+
+            if (newUserState.ToMatchUserStatus() is MatchUserStatus nonNullStatus)
+            {
+                await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.UserStatusChanged), new UserStatusChangedEvent
+                {
+                    RoomId = roomId,
+                    UserId = userId,
+                    Status = nonNullStatus
+                });
+            }
         }
 
         /// <summary>
@@ -282,6 +308,18 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostMatchUserStateChangedAsync(long roomId, int userId, MatchUserState? newMatchUserState)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.MatchUserStateChanged), userId, newMatchUserState);
+
+            switch (newMatchUserState)
+            {
+                case TeamVersusUserState teamVersusUserState:
+                    await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.UserTeamChanged), new UserTeamChangedEvent
+                    {
+                        RoomId = roomId,
+                        UserId = userId,
+                        Team = (MatchTeam)teamVersusUserState.TeamID
+                    });
+                    break;
+            }
         }
 
         /// <summary>
@@ -305,6 +343,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostUserStyleChangedAsync(long roomId, int userId, int? beatmapId, int? rulesetId)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.UserStyleChanged), userId, beatmapId, rulesetId);
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.UserStyleChanged), new UserStyleChangedEvent
+            {
+                RoomId = roomId,
+                UserId = userId,
+                BeatmapId = beatmapId,
+                RulesetId = rulesetId
+            });
         }
 
         /// <summary>
@@ -316,6 +361,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostUserModsChangedAsync(long roomId, int userId, IEnumerable<APIMod> newMods)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.UserModsChanged), userId, newMods);
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.UserModsChanged), new UserModsChangedEvent
+            {
+                RoomId = roomId,
+                UserId = userId,
+                UserMods = newMods.ToArray()
+            });
         }
 
         /// <summary>
@@ -340,6 +391,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostPlaylistItemChangedAsync(long roomId, MultiplayerPlaylistItem item)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.PlaylistItemChanged), item);
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.PlaylistItemChanged), new PlaylistItemChangedEvent(roomId, item));
         }
 
         /// <summary>
@@ -361,6 +413,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostMatchStartedAsync(long roomId, long playlistItemId, MatchStartedEventDetail details)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.LoadRequested));
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.MatchStarted), new MatchStartedEvent
+            {
+                RoomId = roomId,
+                PlaylistItemId = playlistItemId,
+                MatchType = (MatchType)details.room_type.ToMatchType(),
+                Teams = details.teams?.ToDictionary(kv => kv.Key, kv => (MatchTeam)kv.Value),
+            });
             await logToDatabase(new multiplayer_realtime_room_event
             {
                 event_type = "game_started",
@@ -423,6 +482,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="playlistItemId">The ID of the playlist item which was being played.</param>
         public async Task PostMatchAbortedAsync(long roomId, long playlistItemId)
         {
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.MatchAborted), new MatchAbortedEvent
+            {
+                RoomId = roomId,
+                PlaylistItemId = playlistItemId,
+            });
             await logToDatabase(new multiplayer_realtime_room_event
             {
                 event_type = "game_aborted",
@@ -449,6 +513,11 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostMatchCompletedAsync(long roomId, long playlistItemId)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.ResultsReady));
+            await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.MatchCompleted), new MatchCompletedEvent
+            {
+                RoomId = roomId,
+                PlaylistItemId = playlistItemId,
+            });
             await logToDatabase(new multiplayer_realtime_room_event
             {
                 event_type = "game_completed",
