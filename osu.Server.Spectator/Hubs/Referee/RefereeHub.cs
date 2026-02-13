@@ -330,11 +330,11 @@ namespace osu.Server.Spectator.Hubs.Referee
 
                     var newRequiredMods = oldRuleset != newRuleset && request.RequiredMods == null
                         ? []
-                        : (request.RequiredMods ?? oldPlaylistItem.RequiredMods);
+                        : (request.RequiredMods?.Select(mod => mod.ToAPIMod()).ToArray() ?? oldPlaylistItem.RequiredMods);
 
                     var newAllowedMods = oldRuleset != newRuleset && request.AllowedMods == null
                         ? []
-                        : (request.AllowedMods ?? oldPlaylistItem.AllowedMods);
+                        : (request.AllowedMods?.Select(mod => mod.ToAPIMod()).ToArray() ?? oldPlaylistItem.AllowedMods);
 
                     var newPlaylistItem = new MultiplayerPlaylistItem
                     {
@@ -405,6 +405,47 @@ namespace osu.Server.Spectator.Hubs.Referee
                         await ServerMultiplayerRoom.StartMatch(roomUsage.Item);
                     else
                         await roomUsage.Item.StartMatchCountdown(TimeSpan.FromSeconds(request.Countdown.Value));
+                }
+            }
+        }
+
+        public async Task StopGameplayCountdown(long roomId)
+        {
+            using (var userUsage = await refereeStates.GetForUse(Context.GetUserId()))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                ensureIsReferee(roomId, userUsage);
+
+                using (var roomUsage = await roomController.GetRoom(roomId))
+                {
+                    if (roomUsage.Item == null)
+                        ThrowHelper.ThrowRoomDoesNotExist();
+
+                    var countdown = roomUsage.Item.FindCountdownOfType<MatchStartCountdown>();
+
+                    if (countdown == null)
+                        ThrowHelper.ThrowNoActiveCountdown();
+
+                    await roomUsage.Item.StopCountdown(countdown.ID);
+                }
+            }
+        }
+
+        public async Task AbortGameplay(long roomId)
+        {
+            using (var userUsage = await refereeStates.GetForUse(Context.GetUserId()))
+            {
+                Debug.Assert(userUsage.Item != null);
+
+                ensureIsReferee(roomId, userUsage);
+
+                using (var roomUsage = await roomController.GetRoom(roomId))
+                {
+                    if (roomUsage.Item == null)
+                        ThrowHelper.ThrowRoomDoesNotExist();
+
+                    await roomUsage.Item.AbortMatch();
                 }
             }
         }

@@ -3,7 +3,6 @@
 
 using System.Linq;
 using System.Text.Json.Serialization;
-using osu.Game.Online.API;
 using osu.Game.Online.Rooms;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models.Events
@@ -23,13 +22,16 @@ namespace osu.Server.Spectator.Hubs.Referee.Models.Events
         public int BeatmapId { get; set; }
 
         [JsonPropertyName("required_mods")]
-        public APIMod[] RequiredMods { get; set; } = [];
+        public Mod[] RequiredMods { get; set; } = [];
 
         [JsonPropertyName("allowed_mods")]
-        public APIMod[] AllowedMods { get; set; } = [];
+        public Mod[] AllowedMods { get; set; } = [];
 
         [JsonPropertyName("freestyle")]
         public bool Freestyle { get; set; }
+
+        [JsonPropertyName("expired")]
+        public bool Expired { get; set; }
 
         [JsonConstructor]
         public PlaylistItemChangedEvent()
@@ -42,9 +44,10 @@ namespace osu.Server.Spectator.Hubs.Referee.Models.Events
             PlaylistItemId = item.ID;
             RulesetId = item.RulesetID;
             BeatmapId = item.BeatmapID;
-            RequiredMods = item.RequiredMods.ToArray();
-            AllowedMods = item.AllowedMods.ToArray();
+            RequiredMods = item.RequiredMods.Select(Mod.FromAPIMod).ToArray();
+            AllowedMods = item.AllowedMods.Select(Mod.FromAPIMod).ToArray();
             Freestyle = item.Freestyle;
+            Expired = item.Expired;
         }
     }
 }

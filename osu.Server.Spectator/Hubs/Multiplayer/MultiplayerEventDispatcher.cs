@@ -170,17 +170,26 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         public async Task PostMatchEventAsync(long roomId, MatchServerEvent e)
         {
             await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.MatchEvent), e);
+        }
 
-            switch (e)
-            {
-                case Game.Online.Multiplayer.Countdown.CountdownStartedEvent countdownStarted:
-                    await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.CountdownStarted), new CountdownStartedEvent(roomId, countdownStarted));
-                    break;
+        public async Task PostCountdownStartedAsync<T>(long roomId, T countdown)
+            where T : MultiplayerCountdown
+        {
+            await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.MatchEvent), new Game.Online.Multiplayer.Countdown.CountdownStartedEvent(countdown));
 
-                case Game.Online.Multiplayer.Countdown.CountdownStoppedEvent countdownStopped:
-                    await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.CountdownStopped), new CountdownStoppedEvent(roomId, countdownStopped));
-                    break;
-            }
+            var refereeEvent = CountdownStartedEvent.Create(roomId, countdown);
+            if (refereeEvent != null)
+                await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.CountdownStarted), refereeEvent);
+        }
+
+        public async Task PostCountdownStoppedAsync<T>(long roomId, T countdown)
+            where T : MultiplayerCountdown
+        {
+            await multiplayerHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IMultiplayerClient.MatchEvent), new Game.Online.Multiplayer.Countdown.CountdownStoppedEvent(countdown.ID));
+
+            var refereeEvent = CountdownStoppedEvent.Create(roomId, countdown);
+            if (refereeEvent != null)
+                await refereeHubContext.Clients.Group(GetGroupId(roomId)).SendAsync(nameof(IRefereeHubClient.CountdownStopped), refereeEvent);
         }
 
         /// <summary>
@@ -365,7 +374,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             {
                 RoomId = roomId,
                 UserId = userId,
-                UserMods = newMods.ToArray()
+                UserMods = newMods.Select(Mod.FromAPIMod).ToArray()
             });
         }
 

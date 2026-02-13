@@ -73,5 +73,7 @@ namespace osu.Server.Spectator.Hubs.Referee
         Task EditCurrentPlaylistItem(long roomId, EditCurrentPlaylistItemRequest request);
         Task MoveUser(long roomId, MoveUserRequest request);
         Task StartGameplay(long roomId, StartGameplayRequest request);
+        Task StopGameplayCountdown(long roomId);
+        Task AbortGameplay(long roomId);
     }
 }

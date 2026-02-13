@@ -34,5 +34,9 @@ namespace osu.Server.Spectator.Hubs.Referee
         [DoesNotReturn]
         public static void ThrowIncorrectMatchType()
             => throw new RefereeHubException(7, "Cannot perform this operation with the current match type.");
+        
+        [DoesNotReturn]
+        public static void ThrowNoActiveCountdown()
+            => throw new RefereeHubException(8, "No active match start countdown.");
     }
 }

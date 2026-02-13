@@ -2,7 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Text.Json.Serialization;
-using osu.Game.Online.API;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models.Events
 {
@@ -15,6 +14,6 @@ namespace osu.Server.Spectator.Hubs.Referee.Models.Events
         public int UserId { get; set; }
 
         [JsonPropertyName("mods")]
-        public APIMod[] UserMods { get; set; } = [];
+        public Mod[] UserMods { get; set; } = [];
     }
 }

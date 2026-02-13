@@ -3,7 +3,6 @@
 
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using osu.Game.Online.API;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models.Requests
 {
@@ -32,7 +31,7 @@ namespace osu.Server.Spectator.Hubs.Referee.Models.Requests
         /// If <see cref="RulesetId"/> is also changed in the same request and mods are not given, mods will be reset.
         /// </summary>
         [JsonPropertyName("required_mods")]
-        public IEnumerable<APIMod>? RequiredMods { get; set; }
+        public IEnumerable<Mod>? RequiredMods { get; set; }
 
         /// <summary>
         /// The new allowed mods of the playlist item.
@@ -40,7 +39,7 @@ namespace osu.Server.Spectator.Hubs.Referee.Models.Requests
         /// If <see cref="RulesetId"/> is also changed in the same request and mods are not given, mods will be reset.
         /// </summary>
         [JsonPropertyName("allowed_mods")]
-        public IEnumerable<APIMod>? AllowedMods { get; set; }
+        public IEnumerable<Mod>? AllowedMods { get; set; }
 
         /// <summary>
         /// The new freestyle state of the playlist item.
