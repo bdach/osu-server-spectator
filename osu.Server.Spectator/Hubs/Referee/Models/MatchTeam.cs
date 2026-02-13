@@ -6,6 +6,7 @@ using osu.Server.Spectator.Database.Models;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum MatchTeam
     {
         [JsonStringEnumMemberName("blue")]

@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum MatchType
     {
         [JsonStringEnumMemberName("head_to_head")]

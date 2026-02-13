@@ -39,7 +39,7 @@ namespace osu.Server.Spectator.Hubs.Referee.Models.Requests
         /// Pass <see langword="null"/> to keep the previous ones.
         /// If <see cref="RulesetId"/> is also changed in the same request and mods are not given, mods will be reset.
         /// </summary>
-        [JsonPropertyName("required_mods")]
+        [JsonPropertyName("allowed_mods")]
         public IEnumerable<APIMod>? AllowedMods { get; set; }
 
         /// <summary>

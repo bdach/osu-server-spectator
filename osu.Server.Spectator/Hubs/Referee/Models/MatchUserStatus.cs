@@ -6,6 +6,7 @@ using osu.Game.Online.Multiplayer;
 
 namespace osu.Server.Spectator.Hubs.Referee.Models
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum MatchUserStatus
     {
         [JsonStringEnumMemberName("idle")]
