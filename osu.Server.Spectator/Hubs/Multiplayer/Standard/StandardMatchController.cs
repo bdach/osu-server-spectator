@@ -54,7 +54,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
         }
 
         public Task<bool> UserCanJoin(int userId)
-            => Task.FromResult(true);
+            => Task.FromResult(room.Settings.MaxParticipants == null || room.Users.Count < room.Settings.MaxParticipants);
 
         /// <summary>
         /// Updates the queue as a result of a change in the queueing mode.
