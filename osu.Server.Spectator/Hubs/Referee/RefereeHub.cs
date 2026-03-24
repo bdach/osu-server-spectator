@@ -140,8 +140,7 @@ namespace osu.Server.Spectator.Hubs.Referee
                 {
                     Debug.Assert(roomUsage.Item != null);
 
-                    if (!await roomUsage.Item.UserCanJoin(userUsage.Item.UserId))
-                        ThrowHelper.ThrowRoomNotJoinable();
+                    await roomUsage.Item.CheckUserCanJoin(userUsage.Item.UserId);
 
                     password = roomUsage.Item.Settings.Password;
                 }

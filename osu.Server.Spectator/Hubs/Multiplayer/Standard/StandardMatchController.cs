@@ -53,8 +53,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             await updateCurrentItem();
         }
 
-        public Task<bool> UserCanJoin(int userId)
-            => Task.FromResult(room.Settings.MaxParticipants == null || room.Users.Count < room.Settings.MaxParticipants);
+        public Task CheckUserCanJoin(int userId)
+        {
+            if (room.Settings.MaxParticipants != null && room.Users.Count >= room.Settings.MaxParticipants)
+                throw new InvalidStateException("The room is full.");
+
+            return Task.CompletedTask;
+        }
 
         /// <summary>
         /// Updates the queue as a result of a change in the queueing mode.

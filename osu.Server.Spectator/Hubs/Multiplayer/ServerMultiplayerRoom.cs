@@ -389,8 +389,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             if (Settings.MatchType.IsMatchmakingType())
                 throw new InvalidStateException("Can't invite players to matchmaking rooms.");
 
-            if (!await UserCanJoin(invitedUserId))
-                throw new InvalidStateException("Player is not eligible to join this room.");
+            await CheckUserCanJoin(invitedUserId);
 
             await eventDispatcher.PostUserInvitedAsync(RoomID, invitedUserId, invitedBy, Settings.Password);
         }
@@ -1225,7 +1224,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
         #endregion
 
-        public async Task<bool> UserCanJoin(int userId) => !bannedUsers.Contains(userId) && await MatchController.UserCanJoin(userId);
+        public async Task CheckUserCanJoin(int userId)
+        {
+            if (bannedUsers.Contains(userId))
+                throw new InvalidStateException("Not eligible to join this room.");
+
+            await MatchController.CheckUserCanJoin(userId);
+        }
 
         #region IMatchController encapsulation
 

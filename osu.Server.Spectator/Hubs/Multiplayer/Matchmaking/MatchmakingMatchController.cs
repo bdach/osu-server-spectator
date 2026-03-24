@@ -144,8 +144,13 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking
                 state.Users.GetOrAdd(user.UserId);
         }
 
-        public Task<bool> UserCanJoin(int userId)
-            => Task.FromResult(state.Users.UserDictionary.ContainsKey(userId));
+        public Task CheckUserCanJoin(int userId)
+        {
+            if (!state.Users.UserDictionary.ContainsKey(userId))
+                throw new InvalidStateException("Not eligible to join this room.");
+
+            return Task.CompletedTask;
+        }
 
         public Task HandleSettingsChanged()
         {

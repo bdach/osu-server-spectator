@@ -132,9 +132,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Matchmaking.RankedPlay
             await EventDispatcher.PostMatchRoomStateChangedAsync(Room);
         }
 
-        Task<bool> IMatchController.UserCanJoin(int userId)
+        Task IMatchController.CheckUserCanJoin(int userId)
         {
-            return Task.FromResult(State.Users.ContainsKey(userId));
+            if (!State.Users.ContainsKey(userId))
+                throw new InvalidStateException("Not eligible to join this room.");
+
+            return Task.CompletedTask;
         }
 
         Task IMatchController.HandleSettingsChanged()
