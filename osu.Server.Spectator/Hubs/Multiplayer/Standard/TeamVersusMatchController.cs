@@ -15,23 +15,17 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
     {
         private readonly ServerMultiplayerRoom room;
         private readonly MultiplayerEventDispatcher eventDispatcher;
-        private readonly TeamVersusRoomState state;
+
+        protected new TeamVersusRoomState State => (TeamVersusRoomState)base.State;
 
         public TeamVersusMatchController(ServerMultiplayerRoom room, IDatabaseFactory dbFactory, MultiplayerEventDispatcher eventDispatcher)
             : base(room, dbFactory, eventDispatcher)
         {
             this.room = room;
             this.eventDispatcher = eventDispatcher;
-
-            room.MatchState = state = TeamVersusRoomState.CreateDefault();
         }
 
-        public override async Task Initialise()
-        {
-            await base.Initialise();
-
-            await eventDispatcher.PostMatchRoomStateChangedAsync(room);
-        }
+        protected override StandardMatchRoomState CreateRoomState() => TeamVersusRoomState.CreateDefault();
 
         public override async Task HandleUserJoined(MultiplayerRoomUser user)
         {
@@ -51,18 +45,10 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             switch (request)
             {
                 case ChangeTeamRequest changeTeam:
-                    if (state.Locked)
+                    if (State.Locked)
                         throw new InvalidStateException("Teams are currently locked.");
 
                     await ChangeUserTeam(user, changeTeam.TeamID);
-                    break;
-
-                case SetLockStateRequest setRoomLock:
-                    if (state.Locked == setRoomLock.Locked)
-                        break;
-
-                    state.Locked = setRoomLock.Locked;
-                    await eventDispatcher.PostMatchRoomStateChangedAsync(room);
                     break;
             }
         }
@@ -73,7 +59,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
         /// </summary>
         public async Task ChangeUserTeam(MultiplayerRoomUser user, int newTeamId)
         {
-            if (state.Teams.All(t => t.ID != newTeamId))
+            if (State.Teams.All(t => t.ID != newTeamId))
                 throw new InvalidStateException("Attempted to set team out of valid range");
 
             if (user.Role == MultiplayerRoomUserRole.Referee)
@@ -91,7 +77,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
         private int getBestAvailableTeam()
         {
             // initially check for any teams which don't yet have players, but are lower than TeamCount.
-            foreach (var team in state.Teams)
+            foreach (var team in State.Teams)
             {
                 if (room.Users.All(u => (u.MatchState as TeamVersusUserState)?.TeamID != team.ID))
                     return team.ID;
