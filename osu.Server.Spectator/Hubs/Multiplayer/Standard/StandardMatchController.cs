@@ -248,7 +248,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
 
         public virtual async Task HandleUserJoined(MultiplayerRoomUser user)
         {
-            if (State.Slots != null)
+            // assign a slot to the user if they already don't have one.
+            // them having one can be the case particularly on match type changes, as they also call this method on every user in the room.
+            if (State.Slots != null && Array.IndexOf(State.Slots, user.UserID) < 0)
             {
                 // TODO similarly in team versus this should prioritise the half of slots available that corresponds to the user's assigned team
                 int nextEmptySlot = Array.FindIndex(State.Slots, item => item == null);
