@@ -433,7 +433,27 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             await eventDispatcher.PostPlaylistItemRemovedAsync(room.RoomID, playlistItemId);
         }
 
-        public abstract MatchStartedEventDetail GetMatchDetails();
+        public virtual MatchStartedEventDetail GetMatchDetails()
+        {
+            var details = new MatchStartedEventDetail
+            {
+                room_type = database_match_type.head_to_head
+            };
+
+            if (State.Slots != null)
+            {
+                details.slots = new Dictionary<int, byte>();
+
+                for (int i = 0; i < State.Slots.Length; i++)
+                {
+                    int? userId = State.Slots[i];
+                    if (userId != null)
+                        details.slots.Add(userId.Value, (byte)i);
+                }
+            }
+
+            return details;
+        }
 
         private async Task addItem(IDatabaseAccess db, MultiplayerPlaylistItem item)
         {

@@ -93,6 +93,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
 
         public override MatchStartedEventDetail GetMatchDetails()
         {
+            var details = base.GetMatchDetails();
+
             var teams = new Dictionary<int, room_team>();
 
             foreach (var user in room.Users)
@@ -101,11 +103,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                     teams[user.UserID] = userState.TeamID == 0 ? room_team.red : room_team.blue;
             }
 
-            return new MatchStartedEventDetail
-            {
-                room_type = database_match_type.team_versus,
-                teams = teams
-            };
+            details.teams = teams;
+            return details;
         }
     }
 }
