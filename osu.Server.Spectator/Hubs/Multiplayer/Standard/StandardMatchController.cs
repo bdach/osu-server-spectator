@@ -155,30 +155,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
 
         public virtual async Task HandleUserJoined(MultiplayerRoomUser user)
         {
-            // assign a slot to the user if they already don't have one.
-            // them having one can be the case particularly on match type changes, as they also call this method on every user in the room.
-            if (State.Slots != null && Array.IndexOf(State.Slots, user.UserID) < 0)
-            {
-                // TODO similarly in team versus this should prioritise the half of slots available that corresponds to the user's assigned team
-                int nextEmptySlot = Array.FindIndex(State.Slots, item => item == null);
-                if (nextEmptySlot < 0)
-                    throw new InvalidOperationException("Ran out of slots in the room. This should never happen, as the user should not have been able to join the room to begin with.");
-
-                State.Slots[nextEmptySlot] = user.UserID;
-                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
-            }
+            await assignUserSlot(user);
         }
 
         public virtual async Task HandleUserLeft(MultiplayerRoomUser user)
         {
-            if (State.Slots != null)
-            {
-                int userSlot = Array.IndexOf(State.Slots, user.UserID);
-                if (userSlot >= 0)
-                    State.Slots[userSlot] = null;
-
-                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
-            }
+            await clearUserSlot(user);
         }
 
         public virtual Task HandleUserStateChanged(MultiplayerRoomUser user)
@@ -209,10 +191,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             // participant limit has been set, no slots in state => initialise slots
             if (room.Settings.MaxParticipants != null && State.Slots == null)
             {
-                // TODO in team versus this should prolly split slots in half and assign each half to each team or somethin
                 State.Slots = new int?[room.Settings.MaxParticipants.Value];
+
                 for (int i = 0; i < room.Users.Count; i++)
-                    State.Slots[i] = room.Users[i].UserID;
+                {
+                    var user = room.Users[i];
+                    int slot = GetNextBestSlot(user, State.Slots);
+                    State.Slots[slot] = user.UserID;
+                }
+
                 return true;
             }
 
@@ -278,6 +265,39 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                 throw new InvalidStateException("The requested slot is already taken.");
 
             (State.Slots[oldSlotId], State.Slots[newSlotId]) = (State.Slots[newSlotId], State.Slots[oldSlotId]);
+            await eventDispatcher.PostMatchRoomStateChangedAsync(room);
+        }
+
+        private async Task assignUserSlot(MultiplayerRoomUser user)
+        {
+            // assign a slot to the user if they already don't have one.
+            // them having one can be the case particularly on match type changes, as they also call this method on every user in the room.
+            if (State.Slots != null && Array.IndexOf(State.Slots, user.UserID) < 0)
+            {
+                int slot = GetNextBestSlot(user, State.Slots);
+                State.Slots[slot] = user.UserID;
+                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
+            }
+        }
+
+        protected virtual int GetNextBestSlot(MultiplayerRoomUser user, int?[] slots)
+        {
+            int nextEmptySlot = Array.FindIndex(slots, item => item == null);
+            if (nextEmptySlot < 0)
+                throw new InvalidOperationException("Ran out of slots in the room. This should never happen, as the user should not have been able to join the room to begin with.");
+
+            return nextEmptySlot;
+        }
+
+        private async Task clearUserSlot(MultiplayerRoomUser user)
+        {
+            if (State.Slots == null)
+                return;
+
+            int userSlot = Array.IndexOf(State.Slots, user.UserID);
+            if (userSlot >= 0)
+                State.Slots[userSlot] = null;
+
             await eventDispatcher.PostMatchRoomStateChangedAsync(room);
         }
 

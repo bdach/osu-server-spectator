@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,13 +30,15 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
 
         public override async Task HandleUserJoined(MultiplayerRoomUser user)
         {
+            if (user.Role != MultiplayerRoomUserRole.Referee)
+            {
+                user.MatchState = new TeamVersusUserState { TeamID = getBestAvailableTeam() };
+                await eventDispatcher.PostMatchUserStateChangedAsync(room.RoomID, user.UserID, user.MatchState);
+            }
+
+            // ordering is important here - we want to have the user in a team already
+            // so that `GetNextBestSlot()` can work as expected
             await base.HandleUserJoined(user);
-
-            if (user.Role == MultiplayerRoomUserRole.Referee)
-                return;
-
-            user.MatchState = new TeamVersusUserState { TeamID = getBestAvailableTeam() };
-            await eventDispatcher.PostMatchUserStateChangedAsync(room.RoomID, user.UserID, user.MatchState);
         }
 
         public override async Task HandleUserRequest(MultiplayerRoomUser user, MatchUserRequest request)
@@ -89,6 +92,21 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                                     .OrderBy(g => g.Count());
 
             return countsByTeams.First().Key ?? 0;
+        }
+
+        protected override int GetNextBestSlot(MultiplayerRoomUser user, int?[] slots)
+        {
+            if (user.MatchState is not TeamVersusUserState userState)
+                return base.GetNextBestSlot(user, slots);
+
+            int teamSize = slots.Length / State.Teams.Count;
+            int teamStartIndex = userState.TeamID * teamSize;
+
+            int nextEmptySlotInTeam = Array.FindIndex(slots, teamStartIndex, teamSize, item => item == null);
+            if (nextEmptySlotInTeam > 0)
+                return nextEmptySlotInTeam;
+
+            return base.GetNextBestSlot(user, slots);
         }
 
         public override MatchStartedEventDetail GetMatchDetails()
