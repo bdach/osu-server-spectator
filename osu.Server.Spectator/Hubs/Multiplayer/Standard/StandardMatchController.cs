@@ -100,6 +100,94 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
                 await updateCurrentItem();
         }
 
+        /// <summary>
+        /// Expires the current playlist item and advances to the next one in the order defined by the queueing mode.
+        /// </summary>
+        public virtual async Task HandleGameplayCompleted()
+        {
+            using (var db = dbFactory.GetInstance())
+            {
+                // Expire and let clients know that the current item has finished.
+                await db.MarkPlaylistItemAsPlayedAsync(room.RoomID, CurrentItem.ID);
+                room.Playlist[currentPlaylistItemIndex] = (await db.GetPlaylistItemAsync(room.RoomID, CurrentItem.ID)).ToMultiplayerPlaylistItem();
+
+                await room.HandlePlaylistItemChanged(CurrentItem, true);
+                await updatePlaylistOrder(db);
+
+                // In host-only mode, duplicate the playlist item for the next round if no other non-expired items exist.
+                if (room.Settings.QueueMode == QueueMode.HostOnly && room.Playlist.All(item => item.Expired))
+                    await addItem(db, CurrentItem.Clone());
+            }
+
+            await updateCurrentItem();
+        }
+
+        public virtual async Task HandleUserRequest(MultiplayerRoomUser user, MatchUserRequest request)
+        {
+            switch (request)
+            {
+                case RollRequest rollRequest:
+                    if (rollRequest.Max < 2 || rollRequest.Max > 100)
+                        throw new InvalidStateException("Invalid roll request. Max must be in [2, 100] range inclusive.");
+
+                    uint max = rollRequest.Max ?? 100;
+                    uint result = (uint)Random.Shared.Next(1, 1 + (int)max);
+                    var resultEvent = new RollEvent { UserID = user.UserID, Max = max, Result = result };
+                    await eventDispatcher.PostRollEventAsync(room.RoomID, resultEvent);
+                    break;
+
+                case SetLockStateRequest setRoomLock:
+                    if (State.Locked == setRoomLock.Locked)
+                        break;
+
+                    State.Locked = setRoomLock.Locked;
+                    await eventDispatcher.PostMatchRoomStateChangedAsync(room);
+                    break;
+
+                case ChangeSlotRequest changeSlotRequest:
+                    if (State.Locked)
+                        throw new InvalidStateException("Slots are currently locked.");
+
+                    await ChangeUserSlot(user, changeSlotRequest.SlotID);
+                    break;
+            }
+        }
+
+        public virtual async Task HandleUserJoined(MultiplayerRoomUser user)
+        {
+            // assign a slot to the user if they already don't have one.
+            // them having one can be the case particularly on match type changes, as they also call this method on every user in the room.
+            if (State.Slots != null && Array.IndexOf(State.Slots, user.UserID) < 0)
+            {
+                // TODO similarly in team versus this should prioritise the half of slots available that corresponds to the user's assigned team
+                int nextEmptySlot = Array.FindIndex(State.Slots, item => item == null);
+                if (nextEmptySlot < 0)
+                    throw new InvalidOperationException("Ran out of slots in the room. This should never happen, as the user should not have been able to join the room to begin with.");
+
+                State.Slots[nextEmptySlot] = user.UserID;
+                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
+            }
+        }
+
+        public virtual async Task HandleUserLeft(MultiplayerRoomUser user)
+        {
+            if (State.Slots != null)
+            {
+                int userSlot = Array.IndexOf(State.Slots, user.UserID);
+                if (userSlot >= 0)
+                    State.Slots[userSlot] = null;
+
+                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
+            }
+        }
+
+        public virtual Task HandleUserStateChanged(MultiplayerRoomUser user)
+        {
+            return Task.CompletedTask;
+        }
+
+        #region Slot management
+
         private bool updateSlotsFromSettings()
         {
             // participant limit has been unset, no slots in state => nothing to do
@@ -174,59 +262,6 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             return false;
         }
 
-        /// <summary>
-        /// Expires the current playlist item and advances to the next one in the order defined by the queueing mode.
-        /// </summary>
-        public virtual async Task HandleGameplayCompleted()
-        {
-            using (var db = dbFactory.GetInstance())
-            {
-                // Expire and let clients know that the current item has finished.
-                await db.MarkPlaylistItemAsPlayedAsync(room.RoomID, CurrentItem.ID);
-                room.Playlist[currentPlaylistItemIndex] = (await db.GetPlaylistItemAsync(room.RoomID, CurrentItem.ID)).ToMultiplayerPlaylistItem();
-
-                await room.HandlePlaylistItemChanged(CurrentItem, true);
-                await updatePlaylistOrder(db);
-
-                // In host-only mode, duplicate the playlist item for the next round if no other non-expired items exist.
-                if (room.Settings.QueueMode == QueueMode.HostOnly && room.Playlist.All(item => item.Expired))
-                    await addItem(db, CurrentItem.Clone());
-            }
-
-            await updateCurrentItem();
-        }
-
-        public virtual async Task HandleUserRequest(MultiplayerRoomUser user, MatchUserRequest request)
-        {
-            switch (request)
-            {
-                case RollRequest rollRequest:
-                    if (rollRequest.Max < 2 || rollRequest.Max > 100)
-                        throw new InvalidStateException("Invalid roll request. Max must be in [2, 100] range inclusive.");
-
-                    uint max = rollRequest.Max ?? 100;
-                    uint result = (uint)Random.Shared.Next(1, 1 + (int)max);
-                    var resultEvent = new RollEvent { UserID = user.UserID, Max = max, Result = result };
-                    await eventDispatcher.PostRollEventAsync(room.RoomID, resultEvent);
-                    break;
-
-                case SetLockStateRequest setRoomLock:
-                    if (State.Locked == setRoomLock.Locked)
-                        break;
-
-                    State.Locked = setRoomLock.Locked;
-                    await eventDispatcher.PostMatchRoomStateChangedAsync(room);
-                    break;
-
-                case ChangeSlotRequest changeSlotRequest:
-                    if (State.Locked)
-                        throw new InvalidStateException("Slots are currently locked.");
-
-                    await ChangeUserSlot(user, changeSlotRequest.SlotID);
-                    break;
-            }
-        }
-
         public async Task ChangeUserSlot(MultiplayerRoomUser user, byte newSlotId)
         {
             if (State.Slots == null)
@@ -246,38 +281,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer.Standard
             await eventDispatcher.PostMatchRoomStateChangedAsync(room);
         }
 
-        public virtual async Task HandleUserJoined(MultiplayerRoomUser user)
-        {
-            // assign a slot to the user if they already don't have one.
-            // them having one can be the case particularly on match type changes, as they also call this method on every user in the room.
-            if (State.Slots != null && Array.IndexOf(State.Slots, user.UserID) < 0)
-            {
-                // TODO similarly in team versus this should prioritise the half of slots available that corresponds to the user's assigned team
-                int nextEmptySlot = Array.FindIndex(State.Slots, item => item == null);
-                if (nextEmptySlot < 0)
-                    throw new InvalidOperationException("Ran out of slots in the room. This should never happen, as the user should not have been able to join the room to begin with.");
-
-                State.Slots[nextEmptySlot] = user.UserID;
-                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
-            }
-        }
-
-        public virtual async Task HandleUserLeft(MultiplayerRoomUser user)
-        {
-            if (State.Slots != null)
-            {
-                int userSlot = Array.IndexOf(State.Slots, user.UserID);
-                if (userSlot >= 0)
-                    State.Slots[userSlot] = null;
-
-                await eventDispatcher.PostMatchRoomStateChangedAsync(room);
-            }
-        }
-
-        public virtual Task HandleUserStateChanged(MultiplayerRoomUser user)
-        {
-            return Task.CompletedTask;
-        }
+        #endregion
 
         /// <summary>
         /// Add a playlist item to the room's queue.
