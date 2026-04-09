@@ -97,7 +97,10 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                         await userState.SubscribeToEvents(eventDispatcher, roomId);
 
                         if (room.EndDate != null)
+                        {
+                            room.Log("Clearing pending end date.");
                             await room.SetEndDateAsync(null);
+                        }
 
                         room.Log(roomUser, "User joined");
                     }
