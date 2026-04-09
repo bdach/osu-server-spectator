@@ -36,6 +36,11 @@ namespace osu.Server.Spectator.Hubs.Referee
         public void DisassociateFromRoom(long roomId)
             => refereedRoomIds.Remove(roomId);
 
+        void IMultiplayerUserState.DisassociateFromRoom(long roomId)
+        {
+            // oh this sucks dick
+        }
+
         public Task SubscribeToEvents(MultiplayerEventDispatcher eventDispatcher, long roomId)
             => eventDispatcher.SubscribeRefereeAsync(roomId, ConnectionId);
 
