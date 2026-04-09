@@ -157,6 +157,11 @@ namespace osu.Server.Spectator.Hubs.Referee
             {
                 Debug.Assert(userUsage.Item != null);
 
+                // TODO: this operation is not good when being the host
+                // if you leave while host then you cede referee permissions
+                // but the room is still a tournament room so it'll stay open
+                // meaning that once all other users leave it'll take 30 minutes for it to disappear
+
                 ensureIsReferee(roomId, userUsage);
 
                 using (var roomUsage = await roomController.GetRoom(roomId))

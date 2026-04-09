@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using osu.Game.Overlays.Settings;
+using osu.Server.Spectator.Database;
 using osu.Server.Spectator.Entities;
 
 namespace osu.Server.Spectator.Hubs.Multiplayer
@@ -14,13 +16,19 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
     public class MultiplayerRoomLifetimeBackgroundService : BackgroundService
     {
         private readonly EntityStore<ServerMultiplayerRoom> roomStore;
+        private readonly IDatabaseFactory databaseFactory;
+        private readonly MultiplayerEventDispatcher eventDispatcher;
         private readonly ILogger<MultiplayerRoomLifetimeBackgroundService> logger;
 
         public MultiplayerRoomLifetimeBackgroundService(
             EntityStore<ServerMultiplayerRoom> roomStore,
+            IDatabaseFactory databaseFactory,
+            MultiplayerEventDispatcher eventDispatcher,
             ILoggerFactory loggerFactory)
         {
             this.roomStore = roomStore;
+            this.eventDispatcher = eventDispatcher;
+            this.databaseFactory = databaseFactory;
             logger = loggerFactory.CreateLogger<MultiplayerRoomLifetimeBackgroundService>();
         }
 
@@ -46,6 +54,12 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                                 logger.LogDebug("Skipping attempt to destroy usage of room ID:{RoomId} due as its end date has changed to {EndDate}", roomId, roomUsage.Item?.EndDate);
                                 continue;
                             }
+
+                            // TODO: copied from multiplayerroomcontroller, potentially should be a method on room
+                            using (var db = databaseFactory.GetInstance())
+                                await db.EndMatchAsync(roomUsage.Item);
+
+                            await eventDispatcher.PostRoomDisbandedAsync(roomId, null);
 
                             logger.LogDebug("Destroying usage of room ID:{RoomId} as its end date of {EndDate} has passed", roomId, roomUsage.Item.EndDate);
                             roomUsage.Destroy();
