@@ -96,6 +96,9 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
 
                         await userState.SubscribeToEvents(eventDispatcher, roomId);
 
+                        if (room.EndDate != null)
+                            await room.SetEndDateAsync(null);
+
                         room.Log(roomUser, "User joined");
                     }
                     catch
@@ -234,15 +237,25 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                     // Errors are logged internally by SharedInterop.
                 }
 
-                // handle closing the room if the only participant is the user which is leaving.
+                // special handling if the only participant is the user which is leaving.
                 if (room.Users.Count == 0)
                 {
-                    await endMatch(room, removingUserId);
+                    if (!room.TournamentMode)
+                    {
+                        await endMatch(room, removingUserId);
 
-                    // only destroy the usage after the database operation succeeds.
-                    room.Log("Stopping tracking of room (all users left).");
-                    roomUsage.Destroy();
-                    return;
+                        // only destroy the usage after the database operation succeeds.
+                        room.Log("Stopping tracking of room (all users left).");
+                        roomUsage.Destroy();
+                        return;
+                    }
+                    else
+                    {
+                        var endDate = DateTimeOffset.Now.AddMinutes(1);
+                        room.Log($"All users left tournament room; setting room to close on {endDate}");
+                        await room.SetEndDateAsync(endDate);
+                        return; // TODO this probably will not fly.
+                    }
                 }
 
                 // if this user was the host, we need to arbitrarily transfer host so the room can continue to exist.
