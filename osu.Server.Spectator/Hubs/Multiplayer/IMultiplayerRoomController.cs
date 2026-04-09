@@ -43,7 +43,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
         /// <param name="roomUsage">The room being left.</param>
         Task LeaveRoom(
             IMultiplayerUserState user,
-            ItemUsage<ServerMultiplayerRoom> roomUsage);
+            ItemUsage<ServerMultiplayerRoom> roomUsage,
+            bool forceCloseOnEmpty = false);
 
         /// <summary>
         /// The given user is kicked from the room.

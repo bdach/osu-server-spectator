@@ -157,8 +157,8 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             return roomSnapshot;
         }
 
-        public async Task LeaveRoom(IMultiplayerUserState user, ItemUsage<ServerMultiplayerRoom> roomUsage)
-            => await removeUserFromRoom(user, roomUsage, user.UserId);
+        public async Task LeaveRoom(IMultiplayerUserState user, ItemUsage<ServerMultiplayerRoom> roomUsage, bool forceCloseOnEmpty = false)
+            => await removeUserFromRoom(user, roomUsage, user.UserId, forceCloseOnEmpty);
 
         public async Task KickUserFromRoom(IMultiplayerUserState kickedUser, ItemUsage<ServerMultiplayerRoom> roomUsage, int kickedBy)
             => await removeUserFromRoom(kickedUser, roomUsage, kickedBy);
@@ -201,7 +201,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
             room.BanUser(bannedUserId);
         }
 
-        private async Task removeUserFromRoom(IMultiplayerUserState state, ItemUsage<ServerMultiplayerRoom> roomUsage, int removingUserId)
+        private async Task removeUserFromRoom(IMultiplayerUserState state, ItemUsage<ServerMultiplayerRoom> roomUsage, int removingUserId, bool forceCloseOnEmpty = false)
         {
             long? roomId = null;
 
@@ -243,7 +243,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 // special handling if the only participant is the user which is leaving.
                 if (room.Users.Count == 0)
                 {
-                    if (!room.TournamentMode)
+                    if (!room.TournamentMode || forceCloseOnEmpty)
                     {
                         await endMatch(room, removingUserId);
 
@@ -262,7 +262,7 @@ namespace osu.Server.Spectator.Hubs.Multiplayer
                 }
 
                 // if this user was the host, we need to arbitrarily transfer host so the room can continue to exist.
-                if (room.Host?.Equals(user) == true)
+                if (room.Host?.Equals(user) == true && !room.TournamentMode)
                 {
                     // there *has* to still be at least one user in the room (see user check above).
                     var newHost = room.Users.First();

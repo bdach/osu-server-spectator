@@ -215,7 +215,7 @@ namespace osu.Server.Spectator.Hubs.Referee
                         }
                     }
 
-                    await roomController.LeaveRoom(closingUserUsage.Item, roomUsage);
+                    await roomController.LeaveRoom(closingUserUsage.Item, roomUsage, forceCloseOnEmpty: true);
                 }
             }
         }
