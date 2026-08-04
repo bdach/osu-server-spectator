@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -35,11 +36,15 @@ namespace osu.Server.Spectator.Hubs
         private const string statsd_prefix = "score_buffer";
 
         private readonly EntityStore<BufferedScore> store;
+        private readonly ScoreUploader scoreUploader;
         private readonly CancellationTokenSource expiryLoopCancellation;
 
-        public ScoreBuffer(EntityStore<BufferedScore> store)
+        public ScoreBuffer(
+            EntityStore<BufferedScore> store,
+            ScoreUploader scoreUploader)
         {
             this.store = store;
+            this.scoreUploader = scoreUploader;
 
             expiryLoopCancellation = new CancellationTokenSource();
             Task.Factory.StartNew(expiryLoop, TaskCreationOptions.LongRunning);
@@ -54,6 +59,17 @@ namespace osu.Server.Spectator.Hubs
 
                 usage.Item = new BufferedScore(score, beatmap);
                 return true;
+            }
+        }
+
+        public async Task RequeueAsync(long scoreTokenId, BufferedScore bufferedScore)
+        {
+            using (var usage = await store.GetForUse(scoreTokenId, createOnMissing: true))
+            {
+                if (usage.Item != null)
+                    throw new InvalidOperationException($"Cannot {nameof(RequeueAsync)} when the score already exists in the buffer!");
+
+                usage.Item = bufferedScore;
             }
         }
 
@@ -87,7 +103,13 @@ namespace osu.Server.Spectator.Hubs
 
                 buffered.Score.Replay.Frames.AddRange(data.Frames);
 
+                if (data.SequenceNumber != null)
+                    buffered.FrameBundlesReceived.Add(data.SequenceNumber.Value);
+
                 buffered.LastUpdated = DateTimeOffset.Now;
+
+                if (buffered.State == BufferedScoreState.FinishedAndCompleted)
+                    await queueForUpload(scoreTokenId, usage);
             }
         }
 
@@ -122,16 +144,42 @@ namespace osu.Server.Spectator.Hubs
                 {
                     using (var usage = await store.TryGetForUse(scoreToken))
                     {
-                        if (usage?.Item == null || usage.Item.LastUpdated < threshold)
+                        if (usage?.Item?.LastUpdated >= threshold)
+                            continue;
+
+                        switch (usage?.Item?.State)
                         {
-                            usage?.Destroy();
-                            DogStatsd.Increment($@"{statsd_prefix}.expired");
+                            case null:
+                            case BufferedScoreState.NotFinished:
+                                usage?.Destroy();
+                                DogStatsd.Increment($@"{statsd_prefix}.expired");
+                                break;
+
+                            case BufferedScoreState.FinishedButIncomplete:
+                            case BufferedScoreState.FinishedAndCompleted:
+                                await queueForUpload(scoreToken, usage);
+                                break;
                         }
                     }
                 }
 
                 await Task.Delay(TimeSpan.FromMilliseconds(5000));
             }
+        }
+
+        private async Task queueForUpload(long scoreToken, ItemUsage<BufferedScore> usage)
+        {
+            if (usage.Item is BufferedScore bufferedScore)
+            {
+                if (bufferedScore.MissingFrameCount > 0)
+                    DogStatsd.Gauge($@"{statsd_prefix}.dequeued_incomplete", usage.Item.MissingFrameCount);
+                else
+                    DogStatsd.Increment($@"{statsd_prefix}.dequeued");
+
+                await scoreUploader.EnqueueAsync(scoreToken, bufferedScore);
+            }
+
+            usage.Destroy();
         }
 
         public void Dispose()
@@ -149,7 +197,36 @@ namespace osu.Server.Spectator.Hubs
     {
         public Score Score { get; }
         public database_beatmap Beatmap { get; }
+        public HashSet<long> FrameBundlesReceived { get; } = [];
+        public long? LastFrameBundleSequenceNumber { get; set; }
+
+        public long MissingFrameCount
+        {
+            get
+            {
+                if (LastFrameBundleSequenceNumber == null)
+                    return 0;
+
+                // TODO: sorta kinda assumes that sequence numbers start at 1. decide if thats ok
+                return LastFrameBundleSequenceNumber.Value - FrameBundlesReceived.Count;
+            }
+        }
+
         public DateTimeOffset LastUpdated { get; set; }
+
+        public BufferedScoreState State
+        {
+            get
+            {
+                if (LastFrameBundleSequenceNumber == null)
+                    return BufferedScoreState.NotFinished;
+
+                if (MissingFrameCount > 0)
+                    return BufferedScoreState.FinishedButIncomplete;
+
+                return BufferedScoreState.FinishedAndCompleted;
+            }
+        }
 
         public BufferedScore(Score score, database_beatmap beatmap)
         {
@@ -157,5 +234,27 @@ namespace osu.Server.Spectator.Hubs
             Beatmap = beatmap;
             LastUpdated = DateTimeOffset.Now;
         }
+    }
+
+    public enum BufferedScoreState
+    {
+        /// <summary>
+        /// The client has not signalled the end of the score via <see cref="ISpectatorServer.EndPlaySessionV2"/>.
+        /// </summary>
+        NotFinished,
+
+        /// <summary>
+        /// The client has signalled the end of the score via <see cref="ISpectatorServer.EndPlaySessionV2"/>.
+        /// In response, the server has indicated that it has not received some frame bundles.
+        /// The client has not sent over all frame bundles indicated by the server.
+        /// </summary>
+        FinishedButIncomplete,
+
+        /// <summary>
+        /// The client has signalled the end of the score via <see cref="ISpectatorServer.EndPlaySessionV2"/>.
+        /// In response, the server has indicated that it has not received some frame bundles.
+        /// The client has sent over all frame bundles indicated by the server.
+        /// </summary>
+        FinishedAndCompleted,
     }
 }

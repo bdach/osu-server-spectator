@@ -296,7 +296,7 @@ namespace osu.Server.Spectator.Hubs.Spectator
             }
         }
 
-        public async Task EndPlaySessionV2(long? scoreToken, SpectatedUserState finalState)
+        public async Task<EndPlaySessionV2Response> EndPlaySessionV2(long? scoreToken, SpectatedUserState finalState, long? lastSequenceNumber)
         {
             finalState.ThrowIfInvalid();
 
@@ -306,6 +306,8 @@ namespace osu.Server.Spectator.Hubs.Spectator
             {
                 try
                 {
+                    EndPlaySessionV2Response response = new EndPlaySessionV2Response(scoreToken, []);
+
                     shouldBroadcastEnd = scoreToken == null || (scoreToken == usage.Item?.ScoreTokens.LastOrDefault());
 
                     if (scoreToken != null)
@@ -315,9 +317,10 @@ namespace osu.Server.Spectator.Hubs.Spectator
 
                         var score = await scoreBuffer.DequeueAsync(scoreToken.Value);
                         if (score == null)
-                            return;
+                            return response;
 
-                        await processScore(scoreToken.Value, score);
+                        score.LastFrameBundleSequenceNumber = lastSequenceNumber;
+                        response = await processScore(scoreToken.Value, score);
                     }
 
                     if (usage.Item?.State != null && shouldBroadcastEnd)
@@ -325,6 +328,8 @@ namespace osu.Server.Spectator.Hubs.Spectator
                         usage.Item.State.State = finalState;
                         await endPlaySession(Context.GetUserId(), usage.Item.State);
                     }
+
+                    return response;
                 }
                 finally
                 {
@@ -339,27 +344,36 @@ namespace osu.Server.Spectator.Hubs.Spectator
 
         #endregion
 
-        private async Task processScore(long scoreToken, BufferedScore buffered)
+        private async Task<EndPlaySessionV2Response> processScore(long scoreToken, BufferedScore buffered)
         {
             Debug.Assert(buffered != null);
 
             // Do nothing with scores on unranked beatmaps.
             var status = buffered.Score.ScoreInfo.BeatmapInfo!.Status;
             if (status < min_beatmap_status_for_replays || status > max_beatmap_status_for_replays)
-                return;
+                return new EndPlaySessionV2Response(scoreToken, []);
 
             // if the user never hit anything, further processing that depends on the score existing can be waived because the client won't have submitted the score anyway.
             // see: https://github.com/ppy/osu/blob/a47ccb8edd2392258b6b7e176b222a9ecd511fc0/osu.Game/Screens/Play/SubmittingPlayer.cs#L281
             if (!buffered.Score.ScoreInfo.Statistics.Any(s => s.Key.IsHit() && s.Value > 0))
-                return;
+                return new EndPlaySessionV2Response(scoreToken, []);
 
             buffered.Score.ScoreInfo.Date = DateTimeOffset.UtcNow;
             // this call is a little expensive due to reflection usage, so only run it at the end of score processing
             // even though in theory the rank could be recomputed after every replay frame.
             buffered.Score.ScoreInfo.Rank = StandardisedScoreMigrationTools.ComputeRank(buffered.Score.ScoreInfo);
 
-            await scoreUploader.EnqueueAsync(scoreToken, buffered);
+            var response = buffered.LastFrameBundleSequenceNumber == null
+                ? new EndPlaySessionV2Response(scoreToken, [])
+                : new EndPlaySessionV2Response(scoreToken, buffered.FrameBundlesReceived, new EndPlaySessionV2Response.SequenceNumberRange(1, buffered.LastFrameBundleSequenceNumber.Value));
+
+            if (response.MissingFrameBundles.Any())
+                await scoreBuffer.RequeueAsync(scoreToken, buffered);
+            else
+                await scoreUploader.EnqueueAsync(scoreToken, buffered);
+
             await scoreProcessedSubscriber.RegisterForSingleScoreAsync(Context.ConnectionId, Context.GetUserId(), scoreToken);
+            return response;
         }
 
         public async Task StartWatchingUser(int userId)

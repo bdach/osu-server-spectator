@@ -44,7 +44,8 @@ namespace SampleSpectatorClient
                         new[]
                         {
                             new LegacyReplayFrame(i, RNG.Next(0, 512), RNG.Next(0, 512), ReplayButtonState.None)
-                        }));
+                        },
+                        i + 1));
                     Thread.Sleep(50);
                 }
 
