@@ -61,10 +61,9 @@ namespace osu.Server.Spectator.Tests
             loggerFactory.Setup(factory => factory.CreateLogger(It.IsAny<string>()))
                          .Returns(new Mock<ILogger>().Object);
 
-            scoreBuffer = new ScoreBuffer(new EntityStore<BufferedScore>());
-
             mockScoreStorage = new Mock<IScoreStorage>();
             scoreUploader = new ScoreUploader(loggerFactory.Object, databaseFactory.Object, mockScoreStorage.Object, new MemoryCache(new MemoryCacheOptions()));
+            scoreBuffer = new ScoreBuffer(new EntityStore<BufferedScore>(), scoreUploader);
 
             var mockScoreProcessedSubscriber = new Mock<IScoreProcessedSubscriber>();
 
@@ -102,7 +101,8 @@ namespace osu.Server.Spectator.Tests
 
             var data = new FrameDataBundle(
                 new FrameHeader(new ScoreInfo(), new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) });
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1);
 
             // check streaming data is propagating to watchers
             await hub.SendFrameDataV2(0, data);
@@ -148,9 +148,10 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 1
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, 1);
 
             await uploadsCompleteAsync();
 
@@ -193,9 +194,10 @@ namespace osu.Server.Spectator.Tests
 
             await hub.SendFrameDataV2(1234, new FrameDataBundle(
                 new FrameHeader(new ScoreInfo(), new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit, 1);
 
             await uploadsCompleteAsync();
 
@@ -238,9 +240,10 @@ namespace osu.Server.Spectator.Tests
                     Mods = [new OsuModTouchDevice()],
                     Statistics = new Dictionary<HitResult, int> { [HitResult.Great] = 1 }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit, 1);
 
             await uploadsCompleteAsync();
 
@@ -285,9 +288,10 @@ namespace osu.Server.Spectator.Tests
                     TotalScore = 246_642,
                     Pauses = { 1000, 2000 },
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit, 1);
 
             await uploadsCompleteAsync();
 
@@ -334,9 +338,10 @@ namespace osu.Server.Spectator.Tests
                     TotalScoreWithoutMods = null,
                     Pauses = null,
                 },
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit, 1);
 
             await uploadsCompleteAsync();
 
@@ -424,7 +429,7 @@ namespace osu.Server.Spectator.Tests
             });
 
             // End play, but set a playing state.
-            await hub.EndPlaySessionV2(0, SpectatedUserState.Playing);
+            await hub.EndPlaySessionV2(0, SpectatedUserState.Playing, null);
 
             mockReceiver.Verify(clients => clients.UserFinishedPlaying(streamer_id, It.Is<SpectatorState>(m => m.State == SpectatedUserState.Quit)), Times.Once());
         }
@@ -509,9 +514,10 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 10
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, 1);
 
             await uploadsCompleteAsync();
 
@@ -590,9 +596,10 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 10
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, 1);
 
             await uploadsCompleteAsync();
 
@@ -636,9 +643,10 @@ namespace osu.Server.Spectator.Tests
 
             await hub.SendFrameDataV2(1234, new FrameDataBundle(
                 new FrameHeader(new ScoreInfo(), new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Failed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Failed, 1);
 
             await uploadsCompleteAsync();
 
@@ -685,9 +693,10 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Miss] = 1,
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, 1);
 
             await uploadsCompleteAsync();
 
@@ -732,7 +741,8 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 1
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
             await hub.OnDisconnectedAsync(null);
             await hub.OnConnectedAsync();
@@ -752,9 +762,10 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 2
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(5678, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(5678, 0, 0, ReplayButtonState.None) },
+                2));
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, 2);
 
             await uploadsCompleteAsync();
 
@@ -802,7 +813,8 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 1
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
             await hub.OnDisconnectedAsync(null);
 
@@ -857,7 +869,8 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 1
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(1234, 0, 0, ReplayButtonState.None) },
+                1));
 
             mockReceiver.Invocations.Clear();
 
@@ -883,7 +896,8 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 5
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(5678, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(5678, 0, 0, ReplayButtonState.None) },
+                2));
 
             await hub.SendFrameDataV2(5678, new FrameDataBundle(
                 new FrameHeader(new ScoreInfo
@@ -893,11 +907,12 @@ namespace osu.Server.Spectator.Tests
                         [HitResult.Great] = 10
                     }
                 }, new ScoreProcessorStatistics()),
-                new[] { new LegacyReplayFrame(9999, 0, 0, ReplayButtonState.None) }));
+                new[] { new LegacyReplayFrame(9999, 0, 0, ReplayButtonState.None) },
+                1));
 
             mockScoreStorage.Verify(s => s.WriteAsync(It.IsAny<ScoreUploader.UploadItem>()), Times.Never);
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, 2);
 
             mockReceiver.Verify(clients => clients.UserFinishedPlaying(streamer_id, It.IsAny<SpectatorState>()), Times.Never);
 
@@ -907,7 +922,7 @@ namespace osu.Server.Spectator.Tests
                 && item.Score.Score.ScoreInfo.Statistics[HitResult.Great] == 5
                 && item.Score.Score.Replay.Frames.Count == 2)), Times.Once);
 
-            await hub.EndPlaySessionV2(5678, SpectatedUserState.Passed);
+            await hub.EndPlaySessionV2(5678, SpectatedUserState.Passed, 1);
 
             mockReceiver.Verify(clients => clients.UserFinishedPlaying(streamer_id, It.Is<SpectatorState>(m => m.Equals(new SpectatorState
             {
@@ -966,10 +981,10 @@ namespace osu.Server.Spectator.Tests
                 State = SpectatedUserState.Playing,
             }))), Times.Exactly(SpectatorClientState.MAX_STARTED_SCORES + 1));
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => hub.EndPlaySessionV2(1234, SpectatedUserState.Passed));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => hub.EndPlaySessionV2(1234, SpectatedUserState.Passed, null));
 
             for (int i = 1; i < SpectatorClientState.MAX_STARTED_SCORES + 1; ++i)
-                await hub.EndPlaySessionV2(1234 + i, SpectatedUserState.Quit);
+                await hub.EndPlaySessionV2(1234 + i, SpectatedUserState.Quit, null);
 
             Assert.Equal(0, scoreBuffer.RemainingUsages);
         }
@@ -1010,7 +1025,7 @@ namespace osu.Server.Spectator.Tests
             using (var usage = await clientStates.GetForUse(streamer_id))
                 Assert.Equal(1, usage.Item?.ScoreTokens.Count);
 
-            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit);
+            await hub.EndPlaySessionV2(1234, SpectatedUserState.Quit, null);
 
             Assert.Equal(0, scoreBuffer.RemainingUsages);
         }
